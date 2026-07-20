@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chineasy importer</title>
+    <style>
+        :root {
+            --bg: #282c34;
+            --panel: #21252b;
+            --border: #383e4a;
+            --text: #abb2bf;
+            --blue: #61afef;
+            --green: #98c379;
+            --red: #e06c75;
+            --cyan: #56b6c2;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+            font-size: 13px;
+            margin: 0;
+            padding: 24px;
+        }
+
+        .window {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .header {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text);
+            margin-bottom: 20px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .row {
+            margin-bottom: 16px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 6px;
+            color: var(--text);
+            font-weight: 500;
+        }
+
+        .field-group {
+            display: flex;
+            gap: 8px;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            background: var(--panel);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 6px 10px;
+            font-family: inherit;
+            font-size: 13px;
+            border-radius: 4px;
+            outline: none;
+        }
+
+        input[type="text"]:focus {
+            border-color: var(--blue);
+        }
+
+        button {
+            background: #3b404d;
+            color: var(--text);
+            border: 1px solid var(--border);
+            padding: 6px 14px;
+            font-size: 13px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-family: inherit;
+        }
+
+        button:hover {
+            background: #454c5c;
+            color: #fff;
+        }
+
+        .folder-list {
+            margin-top: 6px;
+            font-size: 12px;
+        }
+
+        .folder-link {
+            display: inline-block;
+            color: var(--blue);
+            margin-right: 12px;
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        .folder-link:hover {
+            text-decoration: underline;
+        }
+
+        .folder-link.processed {
+            color: #5c6370;
+        }
+
+        #terminal {
+            background: var(--panel);
+            color: var(--green);
+            font-family: "SF Mono", Menlo, Monaco, monospace;
+            font-size: 12px;
+            padding: 10px;
+            height: 160px;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+            white-space: pre-wrap;
+            border-radius: 4px;
+            line-height: 1.4;
+        }
+
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 12px;
+        }
+
+        .card-box {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            padding: 12px;
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        .hanzi {
+            font-size: 36px;
+            color: var(--red);
+            font-weight: 600;
+        }
+
+        .pinyin {
+            font-size: 14px;
+            color: var(--cyan);
+            margin: 4px 0;
+        }
+
+        .english {
+            color: var(--green);
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+
+        .story {
+            font-size: 11px;
+            color: #5c6370;
+            margin-bottom: 8px;
+        }
+
+        .mnemo-img {
+            max-width: 120px;
+            max-height: 120px;
+            display: block;
+            margin: 0 auto;
+        }
+
+        .btn-audio {
+            background: transparent;
+            border: 1px solid var(--cyan);
+            color: var(--cyan);
+            padding: 1px 6px;
+            font-size: 11px;
+            border-radius: 3px;
+            margin-left: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="window">
+        <div class="header">Chineasy importer</div>
+
+        <div class="row">
+            <label for="folder-input">Dossier d'import</label>
+            <div class="field-group">
+                <input type="text" id="folder-input" value="captures" placeholder="captures/...">
+                <button id="btn-start" onclick="startProcessing()">Lancer</button>
+            </div>
+            <div class="folder-list" id="folder-list"></div>
+        </div>
+
+        <div class="row">
+            <label>Console</label>
+            <div id="terminal"></div>
+        </div>
+
+        <div class="row">
+            <label>Cartes créées</label>
+            <div class="cards-grid" id="cards-grid"></div>
+        </div>
+    </div>
+
+    <script>
+        fetchFolders();
+
+        function fetchFolders() {
+            fetch('/api/folders')
+                .then(res => res.json())
+                .then(folders => {
+                    const container = document.getElementById('folder-list');
+                    container.innerHTML = '';
+                    folders.forEach(f => {
+                        const link = document.createElement('span');
+                        link.className = `folder-link ${f.is_processed ? 'processed' : ''}`;
+                        link.textContent = f.name + (f.is_processed ? ' [traité]' : '');
+                        link.onclick = () => { document.getElementById('folder-input').value = f.path; };
+                        container.appendChild(link);
+                    });
+                });
+        }
+
+        function startProcessing() {
+            const folder = document.getElementById('folder-input').value.trim();
+            if (!folder) return;
+
+            const btn = document.getElementById('btn-start');
+            const terminal = document.getElementById('terminal');
+            btn.disabled = true;
+            btn.textContent = 'Traitement...';
+            terminal.textContent = '';
+
+            const es = new EventSource(`/api/process?folder=${encodeURIComponent(folder)}`);
+
+            es.onmessage = function(e) {
+                const data = JSON.parse(e.data);
+                if (data.type === 'log') {
+                    terminal.textContent += data.text + '\n';
+                    terminal.scrollTop = terminal.scrollHeight;
+                } else if (data.type === 'result') {
+                    es.close();
+                    btn.disabled = false;
+                    btn.textContent = 'Lancer';
+                    fetchFolders();
+                    renderCards(data.cards);
+                } else if (data.type === 'error') {
+                    es.close();
+                    btn.disabled = false;
+                    btn.textContent = 'Lancer';
+                    terminal.textContent += '\nErreur: ' + data.text;
+                }
+            };
+
+            es.onerror = function() {
+                es.close();
+                btn.disabled = false;
+                btn.textContent = 'Lancer';
+            };
+        }
+
+        function playAudio(url) {
+            new Audio(url).play();
+        }
+
+        function renderCards(cards) {
+            const grid = document.getElementById('cards-grid');
+            grid.innerHTML = '';
+            if (!cards || cards.length === 0) return;
+            cards.forEach(c => {
+                const item = document.createElement('div');
+                item.className = 'card-box';
+                const audioUrl = c.audio_filename ? `/audio/${c.audio_filename}` : '';
+                const imgUrl = c.img_filename ? `/media/${c.img_filename}` : '';
+                item.innerHTML = `
+                    <div class="hanzi">${c.hanzi || ''}</div>
+                    <div class="pinyin">${c.pinyin || ''} ${audioUrl ? `<button class="btn-audio" onclick="playAudio('${audioUrl}')">Audio</button>` : ''}</div>
+                    <div class="english">${c.english || ''}</div>
+                    <div class="story">${c.story || ''}</div>
+                    ${imgUrl ? `<img src="${imgUrl}" class="mnemo-img">` : ''}
+                `;
+                grid.appendChild(item);
+            });
+        }
+    </script>
+</body>
+</html>

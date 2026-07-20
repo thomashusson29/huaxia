@@ -1,7 +1,7 @@
 """
 Module de traitement d'image et de suppression du fond pour les cartes Chineasy.
-Échantillonne la couleur des coins, génère un fond transparent avec anti-aliasing
-et recadre l'illustration mnémotechnique.
+Échantillonne la couleur des coins, génère un fond transparent avec anti-aliasing,
+masque la barre d'état système et les icônes UI, et recadre l'illustration mnémotechnique.
 """
 
 import os
@@ -41,10 +41,12 @@ def remove_background(
 ) -> str:
     """
     Rend le fond de l'image transparent en se basant sur la couleur de fond échantillonnée dans les coins.
-    Applique un lissage des contours (anti-aliasing) et recadre l'illustration.
+    Masque la barre d'état et les boutons de l'interface (haut 16%, bas 12%),
+    applique un lissage des contours et recadre l'illustration.
     """
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     img = Image.open(image_path).convert("RGBA")
+    width, height = img.size
     
     bg_rgb = detect_corner_background_color(img)
     bg_np = np.array(bg_rgb, dtype=float)
@@ -52,36 +54,38 @@ def remove_background(
     img_np = np.array(img, dtype=float)
     rgb_channels = img_np[:, :, :3]
     
-    # Calcul de la distance euclidienne de chaque pixel par rapport à la couleur de fond
+    # Distance euclidienne de chaque pixel par rapport à la couleur de fond
     diff = rgb_channels - bg_np
     dist = np.sqrt(np.sum(diff ** 2, axis=2))
     
-    # Alpha brut: 0 pour le fond (dist <= tolerance), 255 pour l'objet (dist > tolerance + transition)
+    # Alpha brut avec fondu de transition
     transition_width = 15.0
     alpha = np.clip((dist - color_tolerance) / transition_width * 255.0, 0, 255)
     
-    # Création de l'image alpha
+    # Masquer les éléments d'interface UI (flèche retour, cœur, barre d'état, points de pagination)
+    if height > width * 1.3:  # Ratio smartphone / capture verticale
+        top_crop_margin = int(height * 0.16)
+        bottom_crop_margin = int(height * 0.12)
+        alpha[:top_crop_margin, :] = 0
+        alpha[height - bottom_crop_margin:, :] = 0
+
     alpha_img = Image.fromarray(alpha.astype(np.uint8), mode="L")
     
-    # Lissage léger du masque alpha pour éviter l'effet "escalier" (anti-aliasing)
+    # Lissage léger du masque alpha (anti-aliasing)
     alpha_img = alpha_img.filter(ImageFilter.GaussianBlur(radius=1.2))
     
     # Assemblage RGBA
     img_rgba = img.copy()
     img_rgba.putalpha(alpha_img)
     
-    # Si le recadrage est activé, on découpe la zone utile autour du dessin mnémotechnique
+    # Recadrage automatique autour de l'illustration
     if crop_illustration:
         bbox = alpha_img.getbbox()
         if bbox:
-            w, h = img.size
             left = max(0, bbox[0] - padding)
             top = max(0, bbox[1] - padding)
-            right = min(w, bbox[2] + padding)
-            bottom = min(h, bbox[3] + padding)
-            
-            # Si le découpage inclut le mot du bas (ex: "person"), on peut découper le bas de l'image
-            # ou conserver l'illustration entière.
+            right = min(width, bbox[2] + padding)
+            bottom = min(height, bbox[3] + padding)
             img_rgba = img_rgba.crop((left, top, right, bottom))
             
     img_rgba.save(output_path, format="PNG")

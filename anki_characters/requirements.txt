@@ -4,6 +4,9 @@ numpy
 easyocr
 pytesseract
 pypinyin
+edge-tts
+gTTS
 requests
 genanki
 ollama
+flask

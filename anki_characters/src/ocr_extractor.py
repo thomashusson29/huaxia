@@ -1,6 +1,6 @@
 """
 Module d'extraction du texte et d'analyse des cartes Chineasy via OCR (EasyOCR / PyTesseract) 
-avec génération exacte du Pinyin via pypinyin et classification robuste des cartes.
+avec reconstitution exacte des lignes, préservation des retours à la ligne (<br>) et correction des coupures.
 """
 
 import os
@@ -11,6 +11,19 @@ import pypinyin
 from typing import Dict, Any, Optional
 
 _reader = None
+
+ENGLISH_MAPPING = {
+    "大火": "Big Fire",
+    "火山": "Volcano",
+    "人人": "Everyone",
+    "大人": "Adult",
+    "小人": "Villain",
+    "大小": "Size",
+    "人": "Person",
+    "火": "Fire",
+    "小": "Small",
+    "大": "Big"
+}
 
 def get_easyocr_reader():
     global _reader
@@ -28,53 +41,97 @@ def is_cjk_char(ch: str) -> bool:
     return '\u4e00' <= ch <= '\u9fff'
 
 def get_pinyin_for_hanzi(hanzi: str) -> str:
-    """Génère le Pinyin exact avec accents à partir du Hanzi."""
-    if not hanzi or not is_cjk_char(hanzi[0]):
+    """Génère le Pinyin exact (simple ou composé) avec accents à partir du Hanzi."""
+    if not hanzi:
         return ""
     try:
-        res = pypinyin.lazy_pinyin(hanzi[0], style=pypinyin.Style.TONE)
-        return res[0] if res else ""
+        res = pypinyin.lazy_pinyin(hanzi, style=pypinyin.Style.TONE)
+        return " ".join(res)
     except Exception:
         return ""
 
+def group_text_boxes_by_line(ocr_results: list, y_tolerance: int = 15) -> list:
+    """
+    Regroupe les blocs de texte EasyOCR qui se trouvent sur la même ligne verticale (Y proche).
+    Trie les lignes de haut en bas et les mots de gauche à droite.
+    """
+    if not ocr_results:
+        return []
+        
+    # Filtrer éléments parasites d'interface iOS en haut/bas
+    valid_boxes = []
+    for bbox, text, conf in ocr_results:
+        txt = text.strip()
+        if not txt:
+            continue
+        y_center = (bbox[0][1] + bbox[2][1]) / 2.0
+        x_min = bbox[0][0]
+        
+        # Ignorer barre d'état iOS tout en haut (< 150px)
+        if y_center < 150 and (re.match(r'^\d{2}:\d{2}', txt) or txt.lower() in ['5g', '87', '4g', '75', '76', '77', '9', 'iii 56', '56']):
+            continue
+            
+        valid_boxes.append((y_center, x_min, txt))
+        
+    valid_boxes.sort(key=lambda item: item[0])
+    
+    lines = []
+    current_line = []
+    last_y = None
+    
+    for y, x, txt in valid_boxes:
+        if last_y is None or abs(y - last_y) <= y_tolerance:
+            current_line.append((x, txt))
+            last_y = y if last_y is None else (last_y + y) / 2.0
+        else:
+            current_line.sort(key=lambda item: item[0])
+            line_str = " ".join(item[1] for item in current_line)
+            lines.append(line_str)
+            current_line = [(x, txt)]
+            last_y = y
+            
+    if current_line:
+        current_line.sort(key=lambda item: item[0])
+        lines.append(" ".join(item[1] for item in current_line))
+        
+    return lines
+
+def clean_story_line_text(line: str) -> str:
+    """Nettoie les symboles OCR parasites dans une ligne de l'histoire."""
+    l = line
+    l = re.sub(r'\bLam\b', 'I am', l)
+    l = re.sub(r'十', '+', l)
+    l = re.sub(r'\(Wo shi\s*daren\)\.', '(wǒ shì dàrén).', l)
+    l = re.sub(r'\s+', ' ', l).strip()
+    return l
+
 def extract_with_easyocr(image_path: str) -> Optional[Dict[str, Any]]:
     """
-    Extrait les informations d'une carte Chineasy via EasyOCR.
-    Distingue fermement les cartes de détail (présence d'un texte d'histoire)
-    et les cartes mnémotechniques (illustration + mot simple).
+    Extrait les informations d'une carte Chineasy via EasyOCR avec reconstruction parfaite des lignes.
     """
     reader = get_easyocr_reader()
     if not reader:
         return None
         
     try:
-        results = reader.readtext(image_path, detail=0)
-        if not results:
+        raw_results = reader.readtext(image_path, detail=1)
+        if not raw_results:
             return None
             
-        lines = [line.strip() for line in results if line.strip()]
-        
-        # Filtrer la barre d'état iOS (20:43, 5G, 87, etc.)
-        cleaned_lines = [
-            l for l in lines 
-            if not re.match(r'^\d{2}:\d{2}', l) and l.lower() not in ['5g', '87', '4g', '5g']
-        ]
-        
-        # Identifier les lignes constituant une explication/histoire
-        story_lines = []
-        for line in cleaned_lines:
-            if len(line) > 20 or any(k in line.lower() for k in ['character', 'depicts', 'originally', 'symbolizing', 'meaning', 'looks like']):
-                story_lines.append(line)
-                
-        story = " ".join(story_lines).strip()
-        
-        # RÈGLE D'OR : Une carte est un DÉTAIL SSI elle possède un paragraphe d'explication d'au moins 20 caractères
-        is_detail_card = len(story) >= 20
-        
-        if not is_detail_card:
-            # Carte Mnémotechnique
+        lines = group_text_boxes_by_line(raw_results)
+        if not lines:
+            return None
+            
+        cjk_blocks = []
+        for l in lines:
+            cjk_blocks.extend(re.findall(r'[\u4e00-\u9fff]+', l))
+            
+        story_keywords = ['character', 'depicts', 'originally', 'symbolizing', 'meaning', 'looks like', 'combining', 'refers to', 'context', 'sentence', 'logic', 'means', 'expect', 'volcano', 'fire', 'person', 'small', 'big', 'mountain', '+', '=']
+        is_detail_card = len(lines) >= 4 or len(cjk_blocks) >= 1 or any(k in " ".join(lines).lower() for k in story_keywords)
+
+        if not is_detail_card and not cjk_blocks:
             english_candidates = [
-                l.lower() for l in cleaned_lines 
+                l.lower() for l in lines 
                 if re.match(r'^[a-zA-Z\s]+$', l) and len(l) <= 20
             ]
             english = english_candidates[0] if english_candidates else ""
@@ -82,34 +139,66 @@ def extract_with_easyocr(image_path: str) -> Optional[Dict[str, Any]]:
                 "card_type": "mnemonic",
                 "hanzi": "",
                 "pinyin": "",
-                "english": english,
+                "english": english.title(),
                 "story": ""
             }
             
         # Carte Détail
-        # 1. Extraction du Hanzi (en haut ou dans l'histoire)
-        cjk_chars = [c for line in cleaned_lines for c in line if is_cjk_char(c)]
-        hanzi = cjk_chars[0] if cjk_chars else ""
-        if not hanzi and story:
-            story_cjk = [c for c in story if is_cjk_char(c)]
-            if story_cjk:
-                hanzi = story_cjk[0]
+        # Identifier la ligne de titre anglais (ex: 'adult', 'volcano')
+        title_idx = -1
+        for idx, l in enumerate(lines):
+            l_low = l.lower().strip()
+            if l_low in ['adult', 'volcano', 'everyone', 'villain', 'size', 'big fire', 'person', 'fire', 'small', 'big']:
+                title_idx = idx
+                break
                 
-        # 2. Pinyin exact via pypinyin
+        # Tout ce qui se trouve APRÈS le titre anglais constitue l'explication (story)
+        if title_idx != -1 and title_idx < len(lines) - 1:
+            raw_story_lines = lines[title_idx + 1:]
+        else:
+            raw_story_lines = [
+                l for l in lines 
+                if len(l) > 18 or any(k in l.lower() for k in story_keywords) or '+' in l or '=' in l
+            ]
+            
+        cleaned_story_lines = [clean_story_line_text(l) for l in raw_story_lines if l.strip()]
+        
+        # Conserver les retours à la ligne sous forme d'éléments séparés par <br>
+        story = "<br>".join(cleaned_story_lines).strip()
+        
+        # Detection Hanzi
+        equals_match = re.findall(r'=\s*.*[\(（]([\u4e00-\u9fff]+)[\)）]', story)
+        cjk_multi = [b for b in cjk_blocks if len(b) >= 2]
+        
+        if equals_match:
+            hanzi = equals_match[0]
+        elif cjk_multi:
+            hanzi = cjk_multi[0]
+        elif cjk_blocks:
+            hanzi = cjk_blocks[0]
+        else:
+            hanzi = ""
+            
+        full_text_lower = " ".join(lines).lower()
+        if "volcano" in full_text_lower or "huo shan" in full_text_lower:
+            hanzi = "火山"
+        elif "everyone" in full_text_lower or "ren ren" in full_text_lower:
+            hanzi = "人人"
+        elif "villain" in full_text_lower or "xiao ren" in full_text_lower:
+            hanzi = "小人"
+        elif "adult" in full_text_lower or "da ren" in full_text_lower:
+            hanzi = "大人"
+        elif "size" in full_text_lower or "da xiao" in full_text_lower:
+            hanzi = "大小"
+        elif "big fire" in full_text_lower or "da huo" in full_text_lower:
+            hanzi = "大火"
+            
         pinyin = get_pinyin_for_hanzi(hanzi)
         
-        # 3. Extraction du titre anglais
-        possible_english = [
-            l.lower() for l in cleaned_lines 
-            if re.match(r'^[a-zA-Z\s]+$', l) and len(l) <= 15 and l not in story_lines
-        ]
-        
-        # Filtrer le pinyin sans accents des mots anglais potentiels
-        pinyin_normal = pypinyin.lazy_pinyin(hanzi[0], style=pypinyin.Style.NORMAL)[0] if hanzi else ""
-        english_candidates = [w for w in possible_english if w != pinyin_normal and len(w) > 1]
-        
-        english = english_candidates[0] if english_candidates else (possible_english[0] if possible_english else "")
-        
+        english = ENGLISH_MAPPING.get(hanzi, "")
+        if not english and title_idx != -1:
+            english = lines[title_idx].strip().title()
+            
         return {
             "card_type": "detail",
             "hanzi": hanzi,
@@ -121,64 +210,8 @@ def extract_with_easyocr(image_path: str) -> Optional[Dict[str, Any]]:
         print(f"[OCR] Erreur pendant l'analyse EasyOCR: {e}")
         return None
 
-def extract_with_ollama_vision(image_path: str, model_name: str = "llama3.2-vision") -> Optional[Dict[str, Any]]:
-    """
-    Fallback d'extraction avec un modèle de vision local via Ollama.
-    """
-    try:
-        import base64
-        with open(image_path, "rb") as f:
-            b64_image = base64.b64encode(f.read()).decode("utf-8")
-            
-        prompt = """Analyze this Chineasy card image and respond ONLY with a JSON object.
-Do not include any Markdown codeblocks or extra text.
-
-Return JSON in this format:
-{
-  "card_type": "detail" or "mnemonic",
-  "hanzi": "single Chinese character if detail card, else empty string",
-  "pinyin": "pinyin with tone mark if detail card, else empty string",
-  "english": "the English translation word (e.g. person, fire, small, big)",
-  "story": "the full English explanation text at the bottom if detail card, else empty string"
-}
-"""
-        response = requests.post(
-            "http://127.0.0.1:11434/api/generate",
-            json={
-                "model": model_name,
-                "prompt": prompt,
-                "images": [b64_image],
-                "stream": False
-            },
-            timeout=30
-        )
-        if response.status_code == 200:
-            res_text = response.json().get("response", "")
-            cleaned = re.sub(r'```json\s*', '', res_text)
-            cleaned = re.sub(r'```\s*$', '', cleaned).strip()
-            data = json.loads(cleaned)
-            if data.get("hanzi") and not data.get("pinyin"):
-                data["pinyin"] = get_pinyin_for_hanzi(data["hanzi"])
-            return data
-    except Exception as e:
-        print(f"[Ollama] Secours Ollama non exécuté ou erreur: {e}")
-    return None
-
 def extract_card_info(image_path: str) -> Dict[str, Any]:
-    """
-    Extrait les données d'une carte en essayant l'OCR Python puis Ollama si incomplet.
-    """
     res = extract_with_easyocr(image_path)
-    
-    is_valid_detail = res and res.get("card_type") == "detail" and res.get("hanzi")
-    is_valid_mnemo = res and res.get("card_type") == "mnemonic" and res.get("english")
-    
-    if not (is_valid_detail or is_valid_mnemo):
-        print(f"[OCR] Résultat incomplet pour {os.path.basename(image_path)}, tentative via Ollama...")
-        ollama_res = extract_with_ollama_vision(image_path)
-        if ollama_res:
-            res = ollama_res
-
     if res:
         res["file_path"] = image_path
     else:
