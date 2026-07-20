@@ -1,96 +1,96 @@
 """
-Module de génération audio automatique pour la prononciation exacte des tons mandarins.
-Utilise en priorité les dictionnaires audio chinois (Youdao / Baidu) spécialement conçus 
-pour la déclinaison exacte des 4 tons mandarins, avec repli sur Edge-TTS (-20% vitesse) et gTTS.
+Module de génération audio mandarin haute fidélité pour Anki.
+Interroge en priorité les bases vocales de dictionnaire chinois (Youdao / Baidu)
+avec traçabilité explicite de la source (Humain vs Fallback TTS).
 """
 
 import os
-import asyncio
 import requests
+import asyncio
 from typing import Optional
 
-def fetch_youdao_dictionary_audio(text: str, output_path: str) -> bool:
-    """
-    Récupère la prononciation du dictionnaire chinois Youdao (distinction exacte des 4 tons).
-    """
+def generate_audio_youdao(word: str, output_path: str) -> bool:
+    """Télécharge l'enregistrement humain du dictionnaire Youdao."""
     try:
-        url = f"https://dict.youdao.com/dictvoice?audio={text}&le=zh"
-        headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"}
-        response = requests.get(url, headers=headers, timeout=5)
-        if response.status_code == 200 and len(response.content) > 2000:
+        url = f"http://dict.youdao.com/dictvoice?audio={word}&le=zh"
+        res = requests.get(url, timeout=4)
+        if res.status_code == 200 and len(res.content) > 2000:
             with open(output_path, "wb") as f:
-                f.write(response.content)
+                f.write(res.content)
             return True
-    except Exception as e:
-        print(f"[Audio Youdao] Erreur pour '{text}': {e}")
+    except Exception:
+        pass
     return False
 
-def fetch_baidu_speech_audio(text: str, output_path: str) -> bool:
-    """
-    Récupère la prononciation du dictionnaire Baidu avec vitesse d'apprentissage contrôlée (spd=3).
-    """
+def generate_audio_baidu(word: str, output_path: str) -> bool:
+    """Télécharge l'enregistrement de dictionnaire Baidu Fanyi."""
     try:
-        url = f"https://fanyi.baidu.com/gettts?lan=zh&text={text}&spd=3&source=web"
+        url = f"https://fanyi.baidu.com/gettts?lan=zh&text={word}&spd=3&source=web"
         headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"}
-        response = requests.get(url, headers=headers, timeout=5)
-        if response.status_code == 200 and len(response.content) > 2000:
+        res = requests.get(url, headers=headers, timeout=4)
+        if res.status_code == 200 and len(res.content) > 2000:
             with open(output_path, "wb") as f:
-                f.write(response.content)
+                f.write(res.content)
             return True
-    except Exception as e:
-        print(f"[Audio Baidu] Erreur pour '{text}': {e}")
+    except Exception:
+        pass
     return False
 
-def generate_edge_tts_slow(text: str, output_path: str) -> bool:
-    """
-    Génère un audio Edge-TTS avec un débit ralenti (-20%) pour laisser le ton mandarin s'exprimer pleinement.
-    """
+async def _generate_edge_tts_async(word: str, output_path: str) -> bool:
+    """Fallback Edge-TTS ralenti (-20%)."""
     try:
         import edge_tts
-        
-        async def _async_generate():
-            # Voice masculine Yunjian ou Yunxi à vitesse ralentie pour bien marquer le ton
-            communicate = edge_tts.Communicate(text, 'zh-CN-YunjianNeural', rate='-20%')
-            await communicate.save(output_path)
-            
-        asyncio.run(_async_generate())
+        communicate = edge_tts.Communicate(word, "zh-CN-XiaoxiaoNeural", rate="-20%")
+        await communicate.save(output_path)
         return os.path.exists(output_path) and os.path.getsize(output_path) > 1000
-    except Exception as e:
-        print(f"[Audio Edge-TTS] Erreur pour '{text}': {e}")
-    return False
+    except Exception:
+        return False
 
-def generate_audio_sync(text: str, output_path: str) -> Optional[str]:
+def generate_audio_sync(word: str, output_path: str) -> Optional[str]:
     """
-    Génère la prononciation audio MP3 avec respect strict des 4 tons mandarins.
+    Génère l'audio MP3 pour un caractère ou mot composé chinois.
+    Affiche explicitement la source utilisée (Dictionnaire Youdao HD vs Fallback).
     """
+    if not word:
+        return None
+        
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     
-    # 1. Dictionnaire Youdao (Prononciation humaine de dictionnaire)
-    if fetch_youdao_dictionary_audio(text, output_path):
+    # 1. Priorité Youdao (Enregistrement de dictionnaire humain)
+    if generate_audio_youdao(word, output_path):
+        print(f"  [Audio] '{word}' -> Source : Dictionnaire humain Youdao HD")
         return output_path
         
-    # 2. Dictionnaire Baidu (Vitesse d'apprentissage spd=3)
-    if fetch_baidu_speech_audio(text, output_path):
+    # 2. Secondaire Baidu Dictionary
+    if generate_audio_baidu(word, output_path):
+        print(f"  [Audio] '{word}' -> Source : Dictionnaire Baidu Speech")
         return output_path
         
-    # 3. Edge-TTS ralenti (-20%)
-    if generate_edge_tts_slow(text, output_path):
+    # 3. Fallback Edge-TTS
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+    if loop.run_complete(_generate_edge_tts_async(word, output_path)):
+        print(f"  [Audio Fallback] '{word}' -> Source : Synthèse Edge-TTS Neural (-20%)")
         return output_path
-
-    # 4. Secours gTTS
+        
+    # 4. Secours ultime gTTS
     try:
         from gtts import gTTS
-        tts = gTTS(text=text, lang='zh-CN')
+        tts = gTTS(text=word, lang='zh-CN', slow=True)
         tts.save(output_path)
-        if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
-            return output_path
+        print(f"  [Audio Fallback] '{word}' -> Source : gTTS")
+        return output_path
     except Exception as e:
-        print(f"[Audio gTTS] Échec final pour '{text}': {e}")
-
-    return None
+        print(f"  [Audio Error] Impossible de générer l'audio pour '{word}': {e}")
+        return None
 
 if __name__ == "__main__":
     import sys
-    if len(sys.argv) > 2:
-        res = generate_audio_sync(sys.argv[1], sys.argv[2])
-        print(f"Audio généré : {res}")
+    w = sys.argv[1] if len(sys.argv) > 1 else "火山"
+    out = "test_audio.mp3"
+    res = generate_audio_sync(w, out)
+    print("Résultat:", res)

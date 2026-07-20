@@ -71,27 +71,37 @@ Ouvrez votre navigateur à l'adresse : `http://127.0.0.1:5001`
 | Image | Pillow, opencv-python, numpy | Échantillonnage du fond coloré 4 coins, masque de distance RGB, rognage et masquage status bar iOS. |
 | Appariement | Python | 1. Mot-clé anglais. 2. Recherche histoire. 3. Séquence d'images adjacentes (N-1 -> N). |
 | Audio | requests, edge-tts, gTTS | 1. Dictionnaire Youdao & Baidu Speech (voix humaines HD 4 tons). 2. Edge-TTS (-20%). 3. gTTS. |
-| Export Anki | requests, genanki | 1. AnkiConnect (ports 8766 / 8765) avec dédoublonnage automatique. 2. Paquet автономne genanki (.apkg). |
+| Export Anki | requests, genanki | 1. AnkiConnect (ports 8766 / 8765) avec dédoublonnage automatique. 2. Paquet autonome genanki (.apkg). |
 
 ---
 
 ## 5. Exemple Pratique d'Utilisation
 
-1. Prendre des captures d'écran dans l'application Chineasy :
-   - Capture 1 (Illustration) : Image montrant la flamme (火) et la montagne (山) côte à côte avec le mot "volcano".
-   - Capture 2 (Détail) : Fiche de détail affichant "火山", "huǒ shān", "Volcano", et l'explication "Fire (火) + mountain (山) = Volcano (火山)".
+### 1. Captures d'Écran d'Entrée (Chineasy)
 
-2. Déposer les deux fichiers dans `captures/session_volcan/` :
-   - `captures/session_volcan/IMG_9220.PNG`
-   - `captures/session_volcan/IMG_9221.PNG`
+| Capture Illustration (IMG_9214.PNG) | Capture Fiche Détail (IMG_9215.PNG) |
+| :---: | :---: |
+| ![Illustration Chineasy](docs/images/example_mnemo_adult.png) | ![Fiche Détail Chineasy](docs/images/example_detail_adult.png) |
 
-3. Exécuter la commande :
+### 2. Illustration Mnémotechnique Détourée Générée
+
+| Image PNG Transparent Générée |
+| :---: |
+| ![Illustration Transparent PNG](docs/images/example_transparent_adult.png) |
+
+### 3. Déroulement du Traitement
+
+1. Déposer les deux fichiers dans `captures/session_adult/` :
+   - `captures/session_adult/IMG_9214.PNG` (Illustration)
+   - `captures/session_adult/IMG_9215.PNG` (Détail)
+
+2. Exécuter la commande :
    ```bash
-   python main.py captures/session_volcan
+   python main.py captures/session_adult
    ```
 
-4. Résultat obtenu dans Anki :
-   - Le paquet `chinois::chineasy_characters` reçoit la note **火山**.
-   - **Carte 1 (Visuelle)** : Recto avec "火山" -> Verso avec "火山", Pinyin "huǒ shān", Audio MP3 "audio_zh_火山.mp3", Traduction "Volcano", Explication "Fire (火) + mountain (山) = Volcano (火山)", et l'image transparente détourée des deux idéogrammes.
-   - **Carte 2 (Écoute & Écriture)** : Recto avec la lecture audio "huǒ shān", la case pour taper "huǒ shān" et le tableau blanc pour tracer le caractère -> Verso avec la correction complète.
-   - Le dossier `captures/session_volcan` est automatiquement renommé en `captures/session_volcan_PROCESSED`.
+3. Résultat obtenu dans Anki :
+   - Le paquet `chinois::chineasy_characters` reçoit la note **大人**.
+   - **Carte 1 (Visuelle)** : Recto avec "大人" -> Verso avec "大人", Pinyin "dà rén", Audio MP3 "audio_zh_大人.mp3", Traduction "Adult", Explication complète avec retours à la ligne exacts, et l'image transparente détourée.
+   - **Carte 2 (Écoute & Écriture)** : Recto avec la lecture audio "dà rén", la case pour taper "dà rén" et le tableau blanc HTML5 pour tracer le caractère -> Verso avec la correction complète.
+   - Le dossier `captures/session_adult` est automatiquement renommé en `captures/session_adult_PROCESSED`.
