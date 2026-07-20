@@ -1,0 +1,9 @@
+pillow
+opencv-python
+numpy
+easyocr
+pytesseract
+pypinyin
+requests
+genanki
+ollama
