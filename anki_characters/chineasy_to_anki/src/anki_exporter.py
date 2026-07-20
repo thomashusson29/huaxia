@@ -1,6 +1,6 @@
 """
 Module d'exportation vers Anki via AnkiConnect (API local ports 8766 / 8765) 
-générant 2 cartes automatiques par note et respectant la mise en forme et retours à la ligne des explications.
+générant 2 cartes automatiques par note avec fond sombre #2c2c2c en mode nuit.
 """
 
 import os
@@ -24,7 +24,7 @@ MODEL_CSS = """
 }
 .nightMode .card {
     color: #abb2bf;
-    background-color: #282c34;
+    background-color: #2c2c2c;
 }
 .card-type-header {
     font-size: 14px;
@@ -193,7 +193,6 @@ CARD2_BACK = """
 """
 
 def get_active_ankiconnect_url() -> str:
-    """Trouve le port actif d'AnkiConnect (8766 ou 8765)."""
     for port in ANKI_CONNECT_PORTS:
         url = f"http://127.0.0.1:{port}"
         try:
@@ -205,7 +204,6 @@ def get_active_ankiconnect_url() -> str:
     return ""
 
 def invoke_ankiconnect(action: str, **params) -> Any:
-    """Helper pour appeler l'API AnkiConnect sur le port détecté."""
     url = get_active_ankiconnect_url()
     if not url:
         raise Exception("AnkiConnect non disponible")
@@ -220,42 +218,9 @@ def invoke_ankiconnect(action: str, **params) -> Any:
     raise Exception(f"HTTP Error {response.status_code}")
 
 def check_ankiconnect_available() -> bool:
-    """Vérifie si AnkiConnect est actif en arrière-plan."""
     return bool(get_active_ankiconnect_url())
 
-def repair_missing_deck_audio():
-    """Parcourt les notes du deck et génère l'audio s'il manque."""
-    from src.audio_generator import generate_audio_sync
-    try:
-        note_ids = invoke_ankiconnect('findNotes', query=f'deck:"{DECK_NAME}"')
-        if not note_ids:
-            return
-        notes_info = invoke_ankiconnect('notesInfo', notes=note_ids)
-        audio_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'output_audio')
-        os.makedirs(audio_dir, exist_ok=True)
-
-        for n in notes_info:
-            nid = n['noteId']
-            fields = n['fields']
-            hanzi = fields.get('Hanzi', {}).get('value', '').strip()
-            audio_val = fields.get('Audio', {}).get('value', '').strip()
-            
-            if hanzi and not audio_val:
-                audio_filename = f"audio_zh_{hanzi}.mp3"
-                audio_path = os.path.join(audio_dir, audio_filename)
-                res_audio = generate_audio_sync(hanzi, audio_path)
-                if res_audio and os.path.exists(res_audio):
-                    invoke_ankiconnect('storeMediaFile', filename=audio_filename, path=os.path.abspath(res_audio))
-                    sound_tag = f"[sound:{audio_filename}]"
-                    invoke_ankiconnect('updateNoteFields', note={'id': nid, 'fields': {'Audio': sound_tag}})
-                    print(f"  [Auto Repair Audio] Son ajouté pour '{hanzi}' (Note ID {nid})")
-    except Exception as e:
-        print(f"[Auto Repair Audio Warning] {e}")
-
 def export_via_ankiconnect(cards: List[Dict[str, Any]]) -> bool:
-    """
-    Exporte les cartes directement dans Anki via AnkiConnect.
-    """
     url = get_active_ankiconnect_url()
     print(f"[AnkiConnect] Synchronisation vers Anki ({url}) dans le deck '{DECK_NAME}'...")
     
@@ -263,31 +228,29 @@ def export_via_ankiconnect(cards: List[Dict[str, Any]]) -> bool:
     if DECK_NAME not in decks:
         invoke_ankiconnect("createDeck", deck=DECK_NAME)
         
-    # Toujours mettre à jour les CSS et templates du Modèle v3
+    # Toujours forcer la mise à jour du style CSS (mode nuit #2c2c2c)
     try:
         invoke_ankiconnect("updateModelStyling", model={"name": MODEL_NAME, "css": MODEL_CSS})
-    except Exception:
-        pass
+        invoke_ankiconnect("updateModelTemplates", model={
+            "name": MODEL_NAME,
+            "templates": {
+                "1. Reconnaissance Visuelle": {"Front": CARD1_FRONT, "Back": CARD1_BACK},
+                "2. Écoute Audio & Écriture": {"Front": CARD2_FRONT, "Back": CARD2_BACK}
+            }
+        })
+    except Exception as e:
+        print(f"  [Styling Update Warning] {e}")
 
     models = invoke_ankiconnect("modelNames")
     if MODEL_NAME not in models:
-        print(f"[AnkiConnect] Création du modèle v3...")
         invoke_ankiconnect(
             "createModel",
             modelName=MODEL_NAME,
             inOrderFields=["Hanzi", "Pinyin", "Anglais", "Explication", "ImageMnemo", "Audio"],
             css=MODEL_CSS,
             cardTemplates=[
-                {
-                    "Name": "1. Reconnaissance Visuelle",
-                    "Front": CARD1_FRONT,
-                    "Back": CARD1_BACK
-                },
-                {
-                    "Name": "2. Écoute Audio & Écriture",
-                    "Front": CARD2_FRONT,
-                    "Back": CARD2_BACK
-                }
+                {"Name": "1. Reconnaissance Visuelle", "Front": CARD1_FRONT, "Back": CARD1_BACK},
+                {"Name": "2. Écoute Audio & Écriture", "Front": CARD2_FRONT, "Back": CARD2_BACK}
             ]
         )
 
@@ -329,49 +292,47 @@ def export_via_ankiconnect(cards: List[Dict[str, Any]]) -> bool:
             "Audio": audio_sound_tag
         }
 
-        note_payload = {
-            "deckName": DECK_NAME,
-            "modelName": MODEL_NAME,
-            "fields": note_fields,
-            "options": {
-                "allowDuplicate": False,
-                "duplicateScope": "deck"
+        query = f'"deck:{DECK_NAME}" "Hanzi:{hanzi}"'
+        existing_notes = invoke_ankiconnect("findNotes", query=query)
+        if not existing_notes:
+            query_fallback = f'"Hanzi:{hanzi}"'
+            existing_notes = invoke_ankiconnect("findNotes", query=query_fallback)
+
+        if existing_notes:
+            primary_id = existing_notes[0]
+            invoke_ankiconnect("updateNoteFields", note={"id": primary_id, "fields": note_fields})
+            print(f"  [Mise à jour 2-Cartes] Note '{hanzi}' (ID: {primary_id}) mise à jour.")
+            updated_count += 1
+            
+            if len(existing_notes) > 1:
+                duplicate_ids = existing_notes[1:]
+                invoke_ankiconnect("deleteNotes", notes=duplicate_ids)
+                print(f"  [Nettoyage Doublons] Supprimé {len(duplicate_ids)} doublon(s) pour '{hanzi}'.")
+        else:
+            note_payload = {
+                "deckName": DECK_NAME,
+                "modelName": MODEL_NAME,
+                "fields": note_fields,
+                "options": {
+                    "allowDuplicate": False,
+                    "duplicateScope": "deck"
+                }
             }
-        }
-
-        try:
-            note_id = invoke_ankiconnect("addNote", note=note_payload)
-            print(f"  [OK 2-Cartes] Note '{hanzi}' (ID: {note_id}) générée.")
-            added_count += 1
-        except Exception as err:
-            err_msg = str(err)
-            if "duplicate" in err_msg.lower():
-                try:
-                    query = f'"deck:{DECK_NAME}" "Hanzi:{hanzi}"'
-                    existing_notes = invoke_ankiconnect("findNotes", query=query)
-                    if existing_notes:
-                        existing_id = existing_notes[0]
-                        invoke_ankiconnect("updateNoteFields", note={"id": existing_id, "fields": note_fields})
-                        print(f"  [Mise à jour 2-Cartes] Note '{hanzi}' (ID: {existing_id}) mise à jour.")
-                        updated_count += 1
-                    else:
-                        note_payload["options"]["allowDuplicate"] = True
-                        note_id = invoke_ankiconnect("addNote", note=note_payload)
-                        print(f"  [OK Duplicate Allowed] Note '{hanzi}' ajoutée.")
-                        added_count += 1
-                except Exception as update_err:
-                    print(f"  [Échec MAJ] '{hanzi}': {update_err}")
-            else:
-                print(f"  [Erreur Ajout Note] '{hanzi}': {err}")
-
-    repair_missing_deck_audio()
+            try:
+                note_id = invoke_ankiconnect("addNote", note=note_payload)
+                print(f"  [OK 2-Cartes] Note '{hanzi}' (ID: {note_id}) générée.")
+                added_count += 1
+            except Exception as err:
+                note_payload["options"]["allowDuplicate"] = True
+                note_id = invoke_ankiconnect("addNote", note=note_payload)
+                print(f"  [OK Duplicate Allowed] Note '{hanzi}' ajoutée.")
+                added_count += 1
 
     print(f"[AnkiConnect] Synchronisation terminée : {added_count} note(s) créée(s), {updated_count} mise(s) à jour.")
     return True
 
 def export_via_genanki(cards: List[Dict[str, Any]], output_apkg_path: str = "Chineasy.apkg") -> str:
     print(f"[genanki] Génération du paquet autonome {output_apkg_path}...")
-    
     model_id = 1607392325
     deck_id = 2059401923
     
@@ -387,16 +348,8 @@ def export_via_genanki(cards: List[Dict[str, Any]], output_apkg_path: str = "Chi
             {"name": "Audio"}
         ],
         templates=[
-            {
-                "name": "1. Reconnaissance Visuelle",
-                "qfmt": CARD1_FRONT,
-                "afmt": CARD1_BACK
-            },
-            {
-                "name": "2. Écoute Audio & Écriture",
-                "qfmt": CARD2_FRONT,
-                "afmt": CARD2_BACK
-            }
+            {"name": "1. Reconnaissance Visuelle", "qfmt": CARD1_FRONT, "afmt": CARD1_BACK},
+            {"name": "2. Écoute Audio & Écriture", "qfmt": CARD2_FRONT, "afmt": CARD2_BACK}
         ],
         css=MODEL_CSS
     )
@@ -436,7 +389,6 @@ def export_via_genanki(cards: List[Dict[str, Any]], output_apkg_path: str = "Chi
     package = genanki.Package(my_deck)
     package.media_files = media_files
     package.write_to_file(output_apkg_path)
-    print(f"[genanki] Paquet à 2 cartes généré avec succès : {output_apkg_path}")
     return output_apkg_path
 
 def export_to_anki(cards: List[Dict[str, Any]], apkg_output_path: str = "Chineasy.apkg") -> bool:

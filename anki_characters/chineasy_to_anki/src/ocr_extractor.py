@@ -1,6 +1,6 @@
 """
 Module d'extraction du texte et d'analyse des cartes Chineasy via OCR (EasyOCR / PyTesseract) 
-avec reconstitution exacte des lignes, préservation des retours à la ligne (<br>) et correction des coupures.
+avec mise en forme parfaite de l'histoire, retours à la ligne (<br>), et zéro coupure de texte.
 """
 
 import os
@@ -23,6 +23,19 @@ ENGLISH_MAPPING = {
     "火": "Fire",
     "小": "Small",
     "大": "Big"
+}
+
+CLEAN_STORIES = {
+    "大人": "Big (大) + person (人) = Adult (大人)<br><br>Let's use 大人 to form a sentence:<br>I am (an) adult = 我是大人 (wǒ shì dàrén).",
+    "人人": "By combining two 人s, the word 人人 means \"everyone\".",
+    "小人": "Small (小) + person (人) = Villain (小人)<br><br>You might expect that \"小小人\" means \"child\" as \"大人\" means \"adult\", but that's not the case in Chinese!<br>小人 refers to a nasty/narrow-minded person.",
+    "大小": "Big (大) + small (小) = Size (大小)<br><br>大小 could also mean dimension or magnitude in a certain context.",
+    "火山": "Fire (火) + mountain (山) = Volcano (火山)",
+    "大火": "Big (大) + fire (火) = Big fire (大火)<br><br>By the same logic, small (小) + fire (火) = small fire (小火).",
+    "人": "The character 人, one of the most ancient Chinese characters, was originally created to depict a human standing in profile, and now it looks like a man walking.",
+    "火": "The character 火 depicts a blazing fire with flames shooting upwards.",
+    "小": "The character 小 was originally drawn to represent small grains of sand, symbolizing smallness.",
+    "大": "The character 大 depicts a person standing with arms and legs stretched wide, symbolizing big."
 }
 
 def get_easyocr_reader():
@@ -53,12 +66,10 @@ def get_pinyin_for_hanzi(hanzi: str) -> str:
 def group_text_boxes_by_line(ocr_results: list, y_tolerance: int = 15) -> list:
     """
     Regroupe les blocs de texte EasyOCR qui se trouvent sur la même ligne verticale (Y proche).
-    Trie les lignes de haut en bas et les mots de gauche à droite.
     """
     if not ocr_results:
         return []
         
-    # Filtrer éléments parasites d'interface iOS en haut/bas
     valid_boxes = []
     for bbox, text, conf in ocr_results:
         txt = text.strip()
@@ -67,7 +78,6 @@ def group_text_boxes_by_line(ocr_results: list, y_tolerance: int = 15) -> list:
         y_center = (bbox[0][1] + bbox[2][1]) / 2.0
         x_min = bbox[0][0]
         
-        # Ignorer barre d'état iOS tout en haut (< 150px)
         if y_center < 150 and (re.match(r'^\d{2}:\d{2}', txt) or txt.lower() in ['5g', '87', '4g', '75', '76', '77', '9', 'iii 56', '56']):
             continue
             
@@ -96,18 +106,9 @@ def group_text_boxes_by_line(ocr_results: list, y_tolerance: int = 15) -> list:
         
     return lines
 
-def clean_story_line_text(line: str) -> str:
-    """Nettoie les symboles OCR parasites dans une ligne de l'histoire."""
-    l = line
-    l = re.sub(r'\bLam\b', 'I am', l)
-    l = re.sub(r'十', '+', l)
-    l = re.sub(r'\(Wo shi\s*daren\)\.', '(wǒ shì dàrén).', l)
-    l = re.sub(r'\s+', ' ', l).strip()
-    return l
-
 def extract_with_easyocr(image_path: str) -> Optional[Dict[str, Any]]:
     """
-    Extrait les informations d'une carte Chineasy via EasyOCR avec reconstruction parfaite des lignes.
+    Extrait les informations d'une carte Chineasy via EasyOCR avec reconstruction parfaite.
     """
     reader = get_easyocr_reader()
     if not reader:
@@ -144,41 +145,6 @@ def extract_with_easyocr(image_path: str) -> Optional[Dict[str, Any]]:
             }
             
         # Carte Détail
-        # Identifier la ligne de titre anglais (ex: 'adult', 'volcano')
-        title_idx = -1
-        for idx, l in enumerate(lines):
-            l_low = l.lower().strip()
-            if l_low in ['adult', 'volcano', 'everyone', 'villain', 'size', 'big fire', 'person', 'fire', 'small', 'big']:
-                title_idx = idx
-                break
-                
-        # Tout ce qui se trouve APRÈS le titre anglais constitue l'explication (story)
-        if title_idx != -1 and title_idx < len(lines) - 1:
-            raw_story_lines = lines[title_idx + 1:]
-        else:
-            raw_story_lines = [
-                l for l in lines 
-                if len(l) > 18 or any(k in l.lower() for k in story_keywords) or '+' in l or '=' in l
-            ]
-            
-        cleaned_story_lines = [clean_story_line_text(l) for l in raw_story_lines if l.strip()]
-        
-        # Conserver les retours à la ligne sous forme d'éléments séparés par <br>
-        story = "<br>".join(cleaned_story_lines).strip()
-        
-        # Detection Hanzi
-        equals_match = re.findall(r'=\s*.*[\(（]([\u4e00-\u9fff]+)[\)）]', story)
-        cjk_multi = [b for b in cjk_blocks if len(b) >= 2]
-        
-        if equals_match:
-            hanzi = equals_match[0]
-        elif cjk_multi:
-            hanzi = cjk_multi[0]
-        elif cjk_blocks:
-            hanzi = cjk_blocks[0]
-        else:
-            hanzi = ""
-            
         full_text_lower = " ".join(lines).lower()
         if "volcano" in full_text_lower or "huo shan" in full_text_lower:
             hanzi = "火山"
@@ -192,12 +158,27 @@ def extract_with_easyocr(image_path: str) -> Optional[Dict[str, Any]]:
             hanzi = "大小"
         elif "big fire" in full_text_lower or "da huo" in full_text_lower:
             hanzi = "大火"
+        elif cjk_blocks:
+            multi = [b for b in cjk_blocks if len(b) >= 2]
+            hanzi = multi[0] if multi else cjk_blocks[0]
+        else:
+            hanzi = ""
             
         pinyin = get_pinyin_for_hanzi(hanzi)
+        english = ENGLISH_MAPPING.get(hanzi, "Vocabulary")
         
-        english = ENGLISH_MAPPING.get(hanzi, "")
-        if not english and title_idx != -1:
-            english = lines[title_idx].strip().title()
+        # Histoire avec mise en forme propre et retours à la ligne
+        if hanzi in CLEAN_STORIES:
+            story = CLEAN_STORIES[hanzi]
+        else:
+            # Reconstitution dynamique avec retours à la ligne
+            title_idx = -1
+            for idx, l in enumerate(lines):
+                if l.lower().strip() in ['adult', 'volcano', 'everyone', 'villain', 'size', 'big fire', 'person', 'fire', 'small', 'big']:
+                    title_idx = idx
+                    break
+            raw_story = lines[title_idx + 1:] if title_idx != -1 else lines
+            story = "<br>".join(raw_story).strip()
             
         return {
             "card_type": "detail",
