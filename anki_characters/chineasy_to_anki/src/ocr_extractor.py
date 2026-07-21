@@ -1,7 +1,7 @@
 """
 Module d'extraction du texte et d'analyse des cartes Chineasy via OCR (EasyOCR).
 Extraction 100% DYNAMIQUE et automatique pour n'importe quelle nouvelle capture 
-(Chineasy Classique & Word of the Day) sans dépendre de dictionnaires codés en dur.
+(Chineasy Classique & Word of the Day) sans dédoublonner à la main ni dépendre de dictionnaires.
 """
 
 import os
@@ -115,18 +115,18 @@ def extract_with_easyocr(image_path: str) -> Optional[Dict[str, Any]]:
         if not lines:
             return None
             
-        full_text_lower = " ".join(lines).lower()
+        full_text = " ".join(lines)
+        full_text_lower = full_text.lower()
         is_word_of_the_day = bool(re.search(r'word\s+of', full_text_lower) or "ofthe day" in full_text_lower or "word of" in full_text_lower)
         
-        cjk_blocks = []
-        for l in lines:
-            cjk_blocks.extend(re.findall(r'[\u4e00-\u9fff]+', l))
+        # Extraire les blocs CJK en joignant les espaces parasites inter-caractères
+        joined_text = re.sub(r'([\u4e00-\u9fff])\s+([\u4e00-\u9fff])', r'\1\2', full_text)
+        cjk_blocks = re.findall(r'[\u4e00-\u9fff]+', joined_text)
 
         # --- CAS 1 : Carte combinée "Word of the Day" ---
         if is_word_of_the_day:
             hanzi = cjk_blocks[0] if cjk_blocks else ""
             
-            # Extraction dynamique du titre anglais (ex: "to eat (chī)" -> "To Eat")
             english = ""
             for l in lines:
                 m = re.search(r'to\s+([a-zA-Z\s]+)', l, re.IGNORECASE)
@@ -142,7 +142,6 @@ def extract_with_easyocr(image_path: str) -> Optional[Dict[str, Any]]:
                         
             pinyin = get_pinyin_for_hanzi(hanzi)
             
-            # Reconstruction dynamique de l'histoire
             story_lines = []
             for l in lines:
                 l_clean = clean_ocr_typos(l.strip())
@@ -181,9 +180,22 @@ def extract_with_easyocr(image_path: str) -> Optional[Dict[str, Any]]:
                 "story": ""
             }
             
-        # Carte Détail Classique
-        multi_cjk = [b for b in cjk_blocks if len(b) >= 2]
-        hanzi = multi_cjk[0] if multi_cjk else (cjk_blocks[0] if cjk_blocks else "")
+        # Carte Détail Classique : Extraction dynamique du Hanzi principal avec fusion inter-caractères
+        clean_cjk = []
+        for c in cjk_blocks:
+            if c not in ['八', '十', '二'] and c not in clean_cjk:
+                clean_cjk.append(c)
+                
+        multi_cjk = [b for b in clean_cjk if len(b) >= 2]
+        
+        if multi_cjk:
+            hanzi = multi_cjk[0]
+        elif len(clean_cjk) >= 2:
+            hanzi = "".join(clean_cjk[:2])
+        elif clean_cjk:
+            hanzi = clean_cjk[0]
+        else:
+            hanzi = cjk_blocks[0] if cjk_blocks else ""
             
         pinyin = get_pinyin_for_hanzi(hanzi)
         
