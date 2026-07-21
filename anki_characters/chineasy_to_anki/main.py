@@ -2,7 +2,7 @@
 Script principal d'automatisation Chineasy vers Anki.
 Scanne les dossiers de captures non traités, extrait les textes, détoure les images mnémotechniques,
 génère la prononciation audio HD MP3 en mandarin,
-apparie les cartes, synchronise directement vers le deck Anki 'chinois::chineasy_characters',
+apparie les cartes (Classique & Word of the Day), synchronise directement vers le deck Anki 'chinois::chineasy_characters',
 et marque les dossiers traités en les renommant avec le suffixe '_PROCESSED'.
 """
 
@@ -74,7 +74,8 @@ def process_single_folder(folder_path: str, output_media_dir: str = "output_medi
             out_path = os.path.join(output_media_dir, out_name)
             
             try:
-                processed_path = remove_background(mnemo_img, out_path, color_tolerance=40.0)
+                is_wotd = card.get("is_word_of_the_day", False)
+                processed_path = remove_background(mnemo_img, out_path, color_tolerance=40.0, is_word_of_the_day=is_wotd)
                 card["processed_mnemonic_image"] = processed_path
                 print(f"  [OK Image] Détourage généré : {out_name}")
             except Exception as e:
@@ -119,11 +120,6 @@ def process_captures(input_dir: str):
     if not os.path.exists(input_dir):
         print(f"Le chemin '{input_dir}' n'existe pas.")
         return
-
-    # Si le dossier se termine par _PROCESSED
-    if is_processed_folder(input_dir):
-        # Si c'était un dossier explicite mais déjà traité, tenter de retirer le suffixe pour trouver si l'utilisateur pointe dessus
-        pass
 
     has_direct_images = any(
         glob.glob(os.path.join(input_dir, ext)) 

@@ -1,6 +1,6 @@
 """
 Module d'exportation vers Anki via AnkiConnect (API local ports 8766 / 8765) 
-générant 2 cartes automatiques par note avec fond sombre #2c2c2c en mode nuit.
+avec génération audio automatique systématique, recherche exacte du Hanzi et rendu adaptatif Mode Clair / Mode Nuit (#2c2c2c).
 """
 
 import os
@@ -19,51 +19,74 @@ MODEL_CSS = """
     font-size: 18px;
     text-align: center;
     color: #2c3e50;
-    background-color: #f8f9fa;
+    background-color: #ffffff;
     padding: 20px;
 }
-.nightMode .card {
+
+/* Mode Nuit */
+.nightMode .card, body.nightMode {
     color: #abb2bf;
-    background-color: #2c2c2c;
+    background-color: #2c2c2c !important;
 }
+
 .card-type-header {
     font-size: 14px;
     text-transform: uppercase;
     letter-spacing: 1px;
-    color: #61afef;
+    color: #0284c7;
     margin-bottom: 15px;
     font-weight: 600;
 }
+.nightMode .card-type-header {
+    color: #61afef;
+}
+
 .hanzi {
     font-size: 110px;
     font-weight: bold;
     margin-top: 15px;
     margin-bottom: 15px;
+    color: #e11d48;
+}
+.nightMode .hanzi {
     color: #e06c75;
 }
+
 .pinyin {
     font-size: 32px;
     font-weight: 600;
-    color: #56b6c2;
+    color: #0284c7;
     margin-bottom: 10px;
 }
+.nightMode .pinyin {
+    color: #56b6c2;
+}
+
 .english {
     font-size: 26px;
     font-weight: 600;
     text-transform: capitalize;
-    color: #98c379;
+    color: #16a34a;
     margin-bottom: 15px;
 }
+.nightMode .english {
+    color: #98c379;
+}
+
 .story {
     font-size: 15px;
     line-height: 1.6;
-    color: #abb2bf;
+    color: #475569;
     max-width: 550px;
     margin: 15px auto 20px auto;
     font-style: italic;
     white-space: pre-wrap;
     text-align: center;
 }
+.nightMode .story {
+    color: #abb2bf;
+}
+
 .mnemo-img {
     max-width: 250px;
     max-height: 250px;
@@ -71,41 +94,71 @@ MODEL_CSS = """
     border-radius: 12px;
 }
 
-/* Style de saisie Pinyin et Canvas de dessin */
+/* Zone de Saisie - Mode Clair */
 input#typeans {
-    font-size: 20px !important;
+    font-size: 22px !important;
     padding: 8px 12px !important;
     border-radius: 6px !important;
-    border: 1px solid #3e4451 !important;
-    background: #21252b !important;
-    color: #61afef !important;
+    border: 1px solid #cbd5e1 !important;
+    background: #ffffff !important;
+    color: #0284c7 !important;
     text-align: center !important;
     margin: 15px auto !important;
     display: block !important;
     width: 80% !important;
     max-width: 300px !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05) !important;
 }
+
+/* Zone de Saisie - Mode Nuit */
+.nightMode input#typeans {
+    border: 1px solid #3e4451 !important;
+    background: #1e2227 !important;
+    color: #61afef !important;
+    box-shadow: none !important;
+}
+
+code#typeans {
+    font-size: 20px !important;
+    background: transparent !important;
+}
+
+/* Tableau Blanc Dessin - Mode Clair */
 .canvas-container {
     margin: 15px auto;
     display: inline-block;
 }
 #strokeCanvas {
-    border: 1px dashed #61afef;
+    border: 1px dashed #0284c7;
     border-radius: 8px;
-    background-color: #21252b;
+    background-color: #ffffff;
     cursor: crosshair;
     touch-action: none;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 }
+.nightMode #strokeCanvas {
+    border: 1px dashed #61afef;
+    background-color: #1e2227;
+    box-shadow: none;
+}
+
+/* Bouton Effacer - Mode Clair & Nuit */
 .btn-clear {
     display: block;
     margin: 8px auto 0 auto;
+    background: #f1f5f9;
+    color: #334155;
+    border: 1px solid #cbd5e1;
+    padding: 5px 14px;
+    border-radius: 4px;
+    font-size: 13px;
+    cursor: pointer;
+    font-weight: 500;
+}
+.nightMode .btn-clear {
     background: #3b404d;
     color: #abb2bf;
     border: 1px solid #454c5c;
-    padding: 4px 12px;
-    border-radius: 4px;
-    font-size: 12px;
-    cursor: pointer;
 }
 """
 
@@ -131,7 +184,7 @@ CARD1_BACK = """
 
 CARD2_FRONT = """
 <div class="card">
-    <div class="card-type-header">Écoute & Prononciation</div>
+    <div class="card-type-header">Écoute & Écriture (Pinyin ou Caractères)</div>
     <div style="margin: 15px 0; transform: scale(1.3);">{{Audio}}</div>
     <div>{{type:Pinyin}}</div>
     
@@ -148,7 +201,11 @@ CARD2_FRONT = """
     var ctx = canvas.getContext('2d');
     ctx.lineWidth = 4;
     ctx.lineCap = 'round';
-    ctx.strokeStyle = '#61afef';
+    
+    var isNight = document.body.classList.contains('nightMode') || 
+                  (document.documentElement && document.documentElement.classList.contains('nightMode'));
+    ctx.strokeStyle = isNight ? '#61afef' : '#0284c7';
+    
     var drawing = false;
 
     function getPos(e) {
@@ -180,6 +237,7 @@ CARD2_FRONT = """
 CARD2_BACK = """
 <div class="card">
     <div>{{type:Pinyin}}</div>
+    
     <div class="hanzi" style="font-size: 65px; margin-top: 15px;">{{Hanzi}}</div>
     <div class="pinyin">{{Pinyin}}</div>
     <div class="english">{{Anglais}}</div>
@@ -190,6 +248,33 @@ CARD2_BACK = """
     <div>{{ImageMnemo}}</div>
     {{/ImageMnemo}}
 </div>
+
+<script>
+(function() {
+    var typeans = document.getElementById('typeans');
+    if (!typeans) return;
+    
+    var userText = typeans.innerText.trim();
+    var targetHanzi = "{{Hanzi}}".trim();
+    var targetPinyin = "{{Pinyin}}".trim();
+
+    function removeAccents(str) {
+        return str.normalize("NFKD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase().replace(/\\s+/g, '');
+    }
+
+    var normUser = removeAccents(userText);
+    var normPinyin = removeAccents(targetPinyin);
+    var normHanzi = targetHanzi.replace(/\\s+/g, '');
+
+    var isNight = document.body.classList.contains('nightMode') || 
+                  (document.documentElement && document.documentElement.classList.contains('nightMode'));
+    var successColor = isNight ? '#98c379' : '#16a34a';
+
+    if (userText === targetHanzi || normUser === normHanzi || normUser === normPinyin) {
+        typeans.innerHTML = '<div style="color:' + successColor + '; font-weight:bold; font-size:22px; margin: 10px 0;">✓ Correct : ' + userText + '</div>';
+    }
+})();
+</script>
 """
 
 def get_active_ankiconnect_url() -> str:
@@ -220,6 +305,24 @@ def invoke_ankiconnect(action: str, **params) -> Any:
 def check_ankiconnect_available() -> bool:
     return bool(get_active_ankiconnect_url())
 
+def find_exact_note_ids_for_hanzi(hanzi: str) -> List[int]:
+    """Trouve les ID de notes Anki ayant EXACTEMENT ce Hanzi."""
+    query = f'"deck:{DECK_NAME}" "Hanzi:{hanzi}"'
+    matched_ids = invoke_ankiconnect("findNotes", query=query)
+    if not matched_ids:
+        matched_ids = invoke_ankiconnect("findNotes", query=f'"Hanzi:{hanzi}"')
+        
+    if not matched_ids:
+        return []
+        
+    info = invoke_ankiconnect("notesInfo", notes=matched_ids)
+    exact_ids = []
+    for n in info:
+        val = n['fields'].get('Hanzi', {}).get('value', '').strip()
+        if val == hanzi:
+            exact_ids.append(n['noteId'])
+    return exact_ids
+
 def export_via_ankiconnect(cards: List[Dict[str, Any]]) -> bool:
     url = get_active_ankiconnect_url()
     print(f"[AnkiConnect] Synchronisation vers Anki ({url}) dans le deck '{DECK_NAME}'...")
@@ -228,7 +331,6 @@ def export_via_ankiconnect(cards: List[Dict[str, Any]]) -> bool:
     if DECK_NAME not in decks:
         invoke_ankiconnect("createDeck", deck=DECK_NAME)
         
-    # Toujours forcer la mise à jour du style CSS (mode nuit #2c2c2c)
     try:
         invoke_ankiconnect("updateModelStyling", model={"name": MODEL_NAME, "css": MODEL_CSS})
         invoke_ankiconnect("updateModelTemplates", model={
@@ -292,16 +394,12 @@ def export_via_ankiconnect(cards: List[Dict[str, Any]]) -> bool:
             "Audio": audio_sound_tag
         }
 
-        query = f'"deck:{DECK_NAME}" "Hanzi:{hanzi}"'
-        existing_notes = invoke_ankiconnect("findNotes", query=query)
-        if not existing_notes:
-            query_fallback = f'"Hanzi:{hanzi}"'
-            existing_notes = invoke_ankiconnect("findNotes", query=query_fallback)
+        existing_notes = find_exact_note_ids_for_hanzi(hanzi)
 
         if existing_notes:
             primary_id = existing_notes[0]
             invoke_ankiconnect("updateNoteFields", note={"id": primary_id, "fields": note_fields})
-            print(f"  [Mise à jour 2-Cartes] Note '{hanzi}' (ID: {primary_id}) mise à jour.")
+            print(f"  [Mise à jour 2-Cartes] Note '{hanzi}' (ID: {primary_id}) mise à jour avec Audio {audio_sound_tag}.")
             updated_count += 1
             
             if len(existing_notes) > 1:

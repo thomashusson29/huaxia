@@ -1,6 +1,7 @@
 """
-Module d'extraction du texte et d'analyse des cartes Chineasy via OCR (EasyOCR / PyTesseract) 
-avec mise en forme parfaite de l'histoire, retours à la ligne (<br>), et zéro coupure de texte.
+Module d'extraction du texte et d'analyse des cartes Chineasy via OCR (EasyOCR).
+Extraction 100% DYNAMIQUE et automatique pour n'importe quelle nouvelle capture 
+(Chineasy Classique & Word of the Day) sans dépendre de dictionnaires codés en dur.
 """
 
 import os
@@ -11,32 +12,6 @@ import pypinyin
 from typing import Dict, Any, Optional
 
 _reader = None
-
-ENGLISH_MAPPING = {
-    "大火": "Big Fire",
-    "火山": "Volcano",
-    "人人": "Everyone",
-    "大人": "Adult",
-    "小人": "Villain",
-    "大小": "Size",
-    "人": "Person",
-    "火": "Fire",
-    "小": "Small",
-    "大": "Big"
-}
-
-CLEAN_STORIES = {
-    "大人": "Big (大) + person (人) = Adult (大人)<br><br>Let's use 大人 to form a sentence:<br>I am (an) adult = 我是大人 (wǒ shì dàrén).",
-    "人人": "By combining two 人s, the word 人人 means \"everyone\".",
-    "小人": "Small (小) + person (人) = Villain (小人)<br><br>You might expect that \"小小人\" means \"child\" as \"大人\" means \"adult\", but that's not the case in Chinese!<br>小人 refers to a nasty/narrow-minded person.",
-    "大小": "Big (大) + small (小) = Size (大小)<br><br>大小 could also mean dimension or magnitude in a certain context.",
-    "火山": "Fire (火) + mountain (山) = Volcano (火山)",
-    "大火": "Big (大) + fire (火) = Big fire (大火)<br><br>By the same logic, small (小) + fire (火) = small fire (小火).",
-    "人": "The character 人, one of the most ancient Chinese characters, was originally created to depict a human standing in profile, and now it looks like a man walking.",
-    "火": "The character 火 depicts a blazing fire with flames shooting upwards.",
-    "小": "The character 小 was originally drawn to represent small grains of sand, symbolizing smallness.",
-    "大": "The character 大 depicts a person standing with arms and legs stretched wide, symbolizing big."
-}
 
 def get_easyocr_reader():
     global _reader
@@ -54,7 +29,7 @@ def is_cjk_char(ch: str) -> bool:
     return '\u4e00' <= ch <= '\u9fff'
 
 def get_pinyin_for_hanzi(hanzi: str) -> str:
-    """Génère le Pinyin exact (simple ou composé) avec accents à partir du Hanzi."""
+    """Génère automatiquement le Pinyin exact avec accents pour n'importe quel Hanzi."""
     if not hanzi:
         return ""
     try:
@@ -63,10 +38,27 @@ def get_pinyin_for_hanzi(hanzi: str) -> str:
     except Exception:
         return ""
 
+def clean_ocr_typos(text: str) -> str:
+    """
+    Nettoie dynamiquement les erreurs fréquentes de la reconnaissance OCR.
+    """
+    if not text:
+        return ""
+    replacements = {
+        r'\bLam\b': 'I am',
+        r'\bchuild\b': 'child',
+        r'\brchild\b': 'child',
+        r'\'"': '"',
+        r'"\'': '"',
+        r'’': "'",
+        r'”': '"',
+        r'“': '"'
+    }
+    for pattern, repl in replacements.items():
+        text = re.sub(pattern, repl, text)
+    return text
+
 def group_text_boxes_by_line(ocr_results: list, y_tolerance: int = 15) -> list:
-    """
-    Regroupe les blocs de texte EasyOCR qui se trouvent sur la même ligne verticale (Y proche).
-    """
     if not ocr_results:
         return []
         
@@ -78,7 +70,7 @@ def group_text_boxes_by_line(ocr_results: list, y_tolerance: int = 15) -> list:
         y_center = (bbox[0][1] + bbox[2][1]) / 2.0
         x_min = bbox[0][0]
         
-        if y_center < 150 and (re.match(r'^\d{2}:\d{2}', txt) or txt.lower() in ['5g', '87', '4g', '75', '76', '77', '9', 'iii 56', '56']):
+        if y_center < 150 and (re.match(r'^\d{2}:\d{2}', txt) or txt.lower() in ['5g', '87', '4g', '75', '76', '77', '9', 'iii 56', '56', 'tii56']):
             continue
             
         valid_boxes.append((y_center, x_min, txt))
@@ -108,7 +100,7 @@ def group_text_boxes_by_line(ocr_results: list, y_tolerance: int = 15) -> list:
 
 def extract_with_easyocr(image_path: str) -> Optional[Dict[str, Any]]:
     """
-    Extrait les informations d'une carte Chineasy via EasyOCR avec reconstruction parfaite.
+    Extrait 100% DYNAMIQUEMENT les informations de n'importe quelle nouvelle capture d'écran.
     """
     reader = get_easyocr_reader()
     if not reader:
@@ -123,14 +115,59 @@ def extract_with_easyocr(image_path: str) -> Optional[Dict[str, Any]]:
         if not lines:
             return None
             
+        full_text_lower = " ".join(lines).lower()
+        is_word_of_the_day = bool(re.search(r'word\s+of', full_text_lower) or "ofthe day" in full_text_lower or "word of" in full_text_lower)
+        
         cjk_blocks = []
         for l in lines:
             cjk_blocks.extend(re.findall(r'[\u4e00-\u9fff]+', l))
-            
-        story_keywords = ['character', 'depicts', 'originally', 'symbolizing', 'meaning', 'looks like', 'combining', 'refers to', 'context', 'sentence', 'logic', 'means', 'expect', 'volcano', 'fire', 'person', 'small', 'big', 'mountain', '+', '=']
-        is_detail_card = len(lines) >= 4 or len(cjk_blocks) >= 1 or any(k in " ".join(lines).lower() for k in story_keywords)
 
-        if not is_detail_card and not cjk_blocks:
+        # --- CAS 1 : Carte combinée "Word of the Day" ---
+        if is_word_of_the_day:
+            hanzi = cjk_blocks[0] if cjk_blocks else ""
+            
+            # Extraction dynamique du titre anglais (ex: "to eat (chī)" -> "To Eat")
+            english = ""
+            for l in lines:
+                m = re.search(r'to\s+([a-zA-Z\s]+)', l, re.IGNORECASE)
+                if m:
+                    english = f"To {m.group(1).strip().title()}"
+                    break
+            if not english:
+                for l in lines:
+                    l_clean = l.strip()
+                    if not any(k in l_clean.lower() for k in ['word of', 'added to siri', 'show me']) and not is_cjk_char(l_clean[0]):
+                        english = l_clean.title()
+                        break
+                        
+            pinyin = get_pinyin_for_hanzi(hanzi)
+            
+            # Reconstruction dynamique de l'histoire
+            story_lines = []
+            for l in lines:
+                l_clean = clean_ocr_typos(l.strip())
+                if any(k in l_clean.lower() for k in ['word of', 'added to siri', 'show me']):
+                    continue
+                if l_clean == hanzi or l_clean.lower().startswith("to "):
+                    continue
+                story_lines.append(l_clean)
+                
+            story = "<br>".join(story_lines).strip()
+            
+            return {
+                "card_type": "word_of_the_day",
+                "hanzi": hanzi,
+                "pinyin": pinyin,
+                "english": english,
+                "story": story,
+                "is_combined": True
+            }
+
+        # --- CAS 2 : Cartes Classiques Chineasy ---
+        has_formula = any('=' in l or '+' in l for l in lines)
+        is_detail_card = len(cjk_blocks) > 0 or has_formula
+
+        if not is_detail_card:
             english_candidates = [
                 l.lower() for l in lines 
                 if re.match(r'^[a-zA-Z\s]+$', l) and len(l) <= 20
@@ -144,41 +181,35 @@ def extract_with_easyocr(image_path: str) -> Optional[Dict[str, Any]]:
                 "story": ""
             }
             
-        # Carte Détail
-        full_text_lower = " ".join(lines).lower()
-        if "volcano" in full_text_lower or "huo shan" in full_text_lower:
-            hanzi = "火山"
-        elif "everyone" in full_text_lower or "ren ren" in full_text_lower:
-            hanzi = "人人"
-        elif "villain" in full_text_lower or "xiao ren" in full_text_lower:
-            hanzi = "小人"
-        elif "adult" in full_text_lower or "da ren" in full_text_lower:
-            hanzi = "大人"
-        elif "size" in full_text_lower or "da xiao" in full_text_lower:
-            hanzi = "大小"
-        elif "big fire" in full_text_lower or "da huo" in full_text_lower:
-            hanzi = "大火"
-        elif cjk_blocks:
-            multi = [b for b in cjk_blocks if len(b) >= 2]
-            hanzi = multi[0] if multi else cjk_blocks[0]
-        else:
-            hanzi = ""
+        # Carte Détail Classique
+        multi_cjk = [b for b in cjk_blocks if len(b) >= 2]
+        hanzi = multi_cjk[0] if multi_cjk else (cjk_blocks[0] if cjk_blocks else "")
             
         pinyin = get_pinyin_for_hanzi(hanzi)
-        english = ENGLISH_MAPPING.get(hanzi, "Vocabulary")
         
-        # Histoire avec mise en forme propre et retours à la ligne
-        if hanzi in CLEAN_STORIES:
-            story = CLEAN_STORIES[hanzi]
-        else:
-            # Reconstitution dynamique avec retours à la ligne
-            title_idx = -1
-            for idx, l in enumerate(lines):
-                if l.lower().strip() in ['adult', 'volcano', 'everyone', 'villain', 'size', 'big fire', 'person', 'fire', 'small', 'big']:
-                    title_idx = idx
-                    break
-            raw_story = lines[title_idx + 1:] if title_idx != -1 else lines
-            story = "<br>".join(raw_story).strip()
+        english_candidates = []
+        for l in lines:
+            l_clean = l.strip()
+            if re.match(r'^[a-zA-Z\s]{2,20}$', l_clean) and not any(is_cjk_char(c) for c in l_clean):
+                english_candidates.append(l_clean.title())
+        english = english_candidates[0] if english_candidates else ""
+        
+        story_lines = []
+        skip = True
+        for l in lines:
+            l_clean = clean_ocr_typos(l.strip())
+            if not skip:
+                story_lines.append(l_clean)
+            elif english and english.lower() in l_clean.lower():
+                skip = False
+            elif any(k in l_clean for k in ['+', '=', '(']):
+                skip = False
+                story_lines.append(l_clean)
+                
+        if not story_lines:
+            story_lines = [clean_ocr_typos(l.strip()) for l in lines if l.strip() != hanzi]
+            
+        story = "<br>".join(story_lines).strip()
             
         return {
             "card_type": "detail",
