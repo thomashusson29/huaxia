@@ -95,7 +95,7 @@ Ouvrez votre navigateur à l'adresse : `http://127.0.0.1:5001`
 
 | RECTO (Front) : Caractère Seul | VERSO (Back) : Fiche Complète avec Illustration |
 | :---: | :---: |
-| ![Carte Anki Recto 人](docs/images/anki_card1_recto_person.png) | ![Carte Anki Verso 人](docs/images/anki_card1_verso_person.png) |
+| ![Carte Anki Recto 人](docs/images/card_recto_person.png) | ![Carte Anki Verso 人](docs/images/anki_card1_verso_person.png) |
 
 ### Déroulement du Traitement
 
