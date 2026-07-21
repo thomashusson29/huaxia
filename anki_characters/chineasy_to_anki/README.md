@@ -91,19 +91,19 @@ Ouvrez votre navigateur à l'adresse : `http://127.0.0.1:5001`
 
 ## 5. Exemple Pratique d'Utilisation
 
-### 1. Captures d'Écran d'Entrée (Application Chineasy)
+### Cartes Anki Générées en Mode Clair (Light Mode)
 
-| Capture Illustration (IMG_9214.PNG) | Capture Fiche Détail (IMG_9215.PNG) |
+| Carte 1 : Verso Visuel & Détails | Carte 2 : Recto Écoute & Écriture (Pinyin / Hanzi) |
 | :---: | :---: |
-| ![Illustration Chineasy](docs/images/example_mnemo_adult.png) | ![Fiche Détail Chineasy](docs/images/example_detail_adult.png) |
+| ![Carte 1 Visuelle Anki](docs/images/anki_card_visual_light.png) | ![Carte 2 Écriture Anki](docs/images/anki_card_writing_light.png) |
 
-### 2. Illustration Mnémotechnique Détourée Générée
+### Carte Anki Générée en Mode Nuit (Dark Mode `#2c2c2c`)
 
-| Image PNG Transparent Générée |
+| Verso Complet Mode Nuit |
 | :---: |
-| ![Illustration Transparent PNG](docs/images/example_transparent_adult.png) |
+| ![Carte Anki Mode Nuit](docs/images/anki_card_dark_mode.png) |
 
-### 3. Déroulement du Traitement
+### Déroulement du Traitement
 
 1. Déposer les captures d'écran dans `captures/session_demo/` :
    - `captures/session_demo/IMG_9214.PNG` (Illustration)
@@ -116,9 +116,6 @@ Ouvrez votre navigateur à l'adresse : `http://127.0.0.1:5001`
    ```
 
 3. Résultat obtenu dans le deck Anki `chinois::chineasy_characters` :
-   - **Note 大人 (Adult)** :
-     - **Carte 1 (Visuelle)** : Hanzi "大人" au recto -> Verso avec Pinyin "dà rén", Audio HD, Traduction "Adult", Explication complète avec retours à la ligne exacts, et l'image transparente détourée.
-     - **Carte 2 (Écoute & Écriture)** : Audio seul "dà rén" au recto + zone de saisie validant le Pinyin ("da ren") OU les caractères ("大人") + tableau blanc HTML5 pour dessiner les traits -> Verso avec la correction complète.
-   - **Note 吃 (To Eat)** :
-     - Générée automatiquement à partir de la capture unique *Word of the Day* avec ses 2 cartes associées.
+   - **Carte 1 (Reconnaissance Visuelle)** : Hanzi au recto -> Verso avec Pinyin, Audio HD natif, Traduction, Explication complète avec retours à la ligne exacts, et l'image mnémotechnique détourée transparente.
+   - **Carte 2 (Écoute & Écriture)** : Lecture audio au recto + zone de saisie acceptant le Pinyin OU les caractères chinois (Hanzi) + tableau blanc HTML5 pour tracer le caractère -> Verso avec la correction complète.
    - Le dossier `captures/session_demo` est automatiquement renommé en `captures/session_demo_PROCESSED`.
