@@ -1,6 +1,7 @@
 """
 Module d'exportation vers Anki via AnkiConnect (API local ports 8766 / 8765) 
 avec génération audio automatique systématique, recherche exacte du Hanzi et rendu adaptatif Mode Clair / Mode Nuit (#2c2c2c).
+Prise en charge de Chineasy (chinois::chineasy_characters) et de Yoyo Chinese (chinois::yoyo_chinese).
 """
 
 import os
@@ -10,8 +11,14 @@ import genanki
 from typing import List, Dict, Any
 
 ANKI_CONNECT_PORTS = [8766, 8765]
+
+# Chineasy Defaults
 DECK_NAME = "chinois::chineasy_characters"
 MODEL_NAME = "Chineasy Character Model v3"
+
+# Yoyo Chinese Defaults
+YOYO_DECK_NAME = "chinois::yoyo_chinese"
+YOYO_MODEL_NAME = "Yoyo Chinese Model"
 
 MODEL_CSS = """
 .card {
@@ -305,9 +312,9 @@ def invoke_ankiconnect(action: str, **params) -> Any:
 def check_ankiconnect_available() -> bool:
     return bool(get_active_ankiconnect_url())
 
-def find_exact_note_ids_for_hanzi(hanzi: str) -> List[int]:
+def find_exact_note_ids_for_hanzi(hanzi: str, deck_name: str = DECK_NAME) -> List[int]:
     """Trouve les ID de notes Anki ayant EXACTEMENT ce Hanzi."""
-    query = f'"deck:{DECK_NAME}" "Hanzi:{hanzi}"'
+    query = f'"deck:{deck_name}" "Hanzi:{hanzi}"'
     matched_ids = invoke_ankiconnect("findNotes", query=query)
     if not matched_ids:
         matched_ids = invoke_ankiconnect("findNotes", query=f'"Hanzi:{hanzi}"')
@@ -323,18 +330,18 @@ def find_exact_note_ids_for_hanzi(hanzi: str) -> List[int]:
             exact_ids.append(n['noteId'])
     return exact_ids
 
-def export_via_ankiconnect(cards: List[Dict[str, Any]]) -> bool:
+def export_via_ankiconnect(cards: List[Dict[str, Any]], target_deck: str = DECK_NAME, target_model: str = MODEL_NAME) -> bool:
     url = get_active_ankiconnect_url()
-    print(f"[AnkiConnect] Synchronisation vers Anki ({url}) dans le deck '{DECK_NAME}'...")
+    print(f"[AnkiConnect] Synchronisation vers Anki ({url}) dans le deck '{target_deck}'...")
     
     decks = invoke_ankiconnect("deckNames")
-    if DECK_NAME not in decks:
-        invoke_ankiconnect("createDeck", deck=DECK_NAME)
+    if target_deck not in decks:
+        invoke_ankiconnect("createDeck", deck=target_deck)
         
     try:
-        invoke_ankiconnect("updateModelStyling", model={"name": MODEL_NAME, "css": MODEL_CSS})
+        invoke_ankiconnect("updateModelStyling", model={"name": target_model, "css": MODEL_CSS})
         invoke_ankiconnect("updateModelTemplates", model={
-            "name": MODEL_NAME,
+            "name": target_model,
             "templates": {
                 "1. Reconnaissance Visuelle": {"Front": CARD1_FRONT, "Back": CARD1_BACK},
                 "2. Écoute Audio & Écriture": {"Front": CARD2_FRONT, "Back": CARD2_BACK}
@@ -344,10 +351,10 @@ def export_via_ankiconnect(cards: List[Dict[str, Any]]) -> bool:
         print(f"  [Styling Update Warning] {e}")
 
     models = invoke_ankiconnect("modelNames")
-    if MODEL_NAME not in models:
+    if target_model not in models:
         invoke_ankiconnect(
             "createModel",
-            modelName=MODEL_NAME,
+            modelName=target_model,
             inOrderFields=["Hanzi", "Pinyin", "Anglais", "Explication", "ImageMnemo", "Audio"],
             css=MODEL_CSS,
             cardTemplates=[
@@ -385,21 +392,25 @@ def export_via_ankiconnect(cards: List[Dict[str, Any]]) -> bool:
             except Exception as e:
                 print(f"  [Media Audio Error] {e}")
 
+        story_text = card.get("story", "") or card.get("explanation", "")
+        if card.get("literal"):
+            story_text = f"{card.get('literal')}\n\n{story_text}".strip()
+
         note_fields = {
             "Hanzi": hanzi,
             "Pinyin": card.get("pinyin", ""),
             "Anglais": card.get("english", ""),
-            "Explication": card.get("story", ""),
+            "Explication": story_text,
             "ImageMnemo": img_html,
             "Audio": audio_sound_tag
         }
 
-        existing_notes = find_exact_note_ids_for_hanzi(hanzi)
+        existing_notes = find_exact_note_ids_for_hanzi(hanzi, target_deck)
 
         if existing_notes:
             primary_id = existing_notes[0]
             invoke_ankiconnect("updateNoteFields", note={"id": primary_id, "fields": note_fields})
-            print(f"  [Mise à jour 2-Cartes] Note '{hanzi}' (ID: {primary_id}) mise à jour avec Audio {audio_sound_tag}.")
+            print(f"  [Mise à jour] Note '{hanzi}' (ID: {primary_id}) mise à jour.")
             updated_count += 1
             
             if len(existing_notes) > 1:
@@ -408,8 +419,8 @@ def export_via_ankiconnect(cards: List[Dict[str, Any]]) -> bool:
                 print(f"  [Nettoyage Doublons] Supprimé {len(duplicate_ids)} doublon(s) pour '{hanzi}'.")
         else:
             note_payload = {
-                "deckName": DECK_NAME,
-                "modelName": MODEL_NAME,
+                "deckName": target_deck,
+                "modelName": target_model,
                 "fields": note_fields,
                 "options": {
                     "allowDuplicate": False,
@@ -418,7 +429,7 @@ def export_via_ankiconnect(cards: List[Dict[str, Any]]) -> bool:
             }
             try:
                 note_id = invoke_ankiconnect("addNote", note=note_payload)
-                print(f"  [OK 2-Cartes] Note '{hanzi}' (ID: {note_id}) générée.")
+                print(f"  [OK Note] Note '{hanzi}' (ID: {note_id}) générée dans '{target_deck}'.")
                 added_count += 1
             except Exception as err:
                 note_payload["options"]["allowDuplicate"] = True
@@ -426,17 +437,17 @@ def export_via_ankiconnect(cards: List[Dict[str, Any]]) -> bool:
                 print(f"  [OK Duplicate Allowed] Note '{hanzi}' ajoutée.")
                 added_count += 1
 
-    print(f"[AnkiConnect] Synchronisation terminée : {added_count} note(s) créée(s), {updated_count} mise(s) à jour.")
+    print(f"[AnkiConnect] Synchronisation terminée pour {target_deck} : {added_count} note(s) créée(s), {updated_count} mise(s) à jour.")
     return True
 
-def export_via_genanki(cards: List[Dict[str, Any]], output_apkg_path: str = "Chineasy.apkg") -> str:
+def export_via_genanki(cards: List[Dict[str, Any]], output_apkg_path: str = "Chineasy.apkg", target_deck: str = DECK_NAME, target_model: str = MODEL_NAME) -> str:
     print(f"[genanki] Génération du paquet autonome {output_apkg_path}...")
-    model_id = 1607392325
-    deck_id = 2059401923
+    model_id = 1607392325 if target_deck == DECK_NAME else 1607392999
+    deck_id = 2059401923 if target_deck == DECK_NAME else 2059401888
     
     my_model = genanki.Model(
         model_id,
-        MODEL_NAME,
+        target_model,
         fields=[
             {"name": "Hanzi"},
             {"name": "Pinyin"},
@@ -452,7 +463,7 @@ def export_via_genanki(cards: List[Dict[str, Any]], output_apkg_path: str = "Chi
         css=MODEL_CSS
     )
 
-    my_deck = genanki.Deck(deck_id, DECK_NAME)
+    my_deck = genanki.Deck(deck_id, target_deck)
     media_files = []
 
     for card in cards:
@@ -471,13 +482,17 @@ def export_via_genanki(cards: List[Dict[str, Any]], output_apkg_path: str = "Chi
             media_files.append(os.path.abspath(audio_path))
             audio_sound_tag = f"[sound:{audio_filename}]"
 
+        story_text = card.get("story", "") or card.get("explanation", "")
+        if card.get("literal"):
+            story_text = f"{card.get('literal')}\n\n{story_text}".strip()
+
         note = genanki.Note(
             model=my_model,
             fields=[
                 card.get("hanzi", ""),
                 card.get("pinyin", ""),
                 card.get("english", ""),
-                card.get("story", ""),
+                story_text,
                 img_html,
                 audio_sound_tag
             ]
@@ -492,11 +507,24 @@ def export_via_genanki(cards: List[Dict[str, Any]], output_apkg_path: str = "Chi
 def export_to_anki(cards: List[Dict[str, Any]], apkg_output_path: str = "Chineasy.apkg") -> bool:
     if check_ankiconnect_available():
         try:
-            return export_via_ankiconnect(cards)
+            return export_via_ankiconnect(cards, DECK_NAME, MODEL_NAME)
         except Exception as e:
             print(f"[AnkiConnect] Erreur de synchronisation ({e}), bascule sur genanki...")
     else:
         print("[AnkiConnect] AnkiConnect non détecté (Anki n'est pas ouvert).")
 
-    export_via_genanki(cards, apkg_output_path)
+    export_via_genanki(cards, apkg_output_path, DECK_NAME, MODEL_NAME)
+    return True
+
+def export_yoyo_to_anki(items: List[Dict[str, Any]], apkg_output_path: str = "YoyoChinese.apkg") -> bool:
+    """Exportation des cartes Yoyo Chinese vers le deck 'chinois::yoyo_chinese'."""
+    if check_ankiconnect_available():
+        try:
+            return export_via_ankiconnect(items, YOYO_DECK_NAME, YOYO_MODEL_NAME)
+        except Exception as e:
+            print(f"[AnkiConnect] Erreur Yoyo ({e}), bascule sur genanki...")
+    else:
+        print("[AnkiConnect] AnkiConnect non détecté.")
+
+    export_via_genanki(items, apkg_output_path, YOYO_DECK_NAME, YOYO_MODEL_NAME)
     return True

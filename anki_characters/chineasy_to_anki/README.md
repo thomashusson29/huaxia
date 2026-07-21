@@ -1,32 +1,19 @@
-# Chineasy to Anki Studio
+# Chineasy & Yoyo Chinese to Anki Studio
 
-Module de traitement d'images, d'extraction OCR et d'importation automatique de cartes Anki à partir de captures d'écran de l'application Chineasy.
+Module de traitement d'images OCR (Chineasy) et de conversion de cours PDF (Yoyo Chinese) pour la création et la synchronisation automatique de cartes Anki interactives avec audio HD natif.
 
 ---
 
 ## 1. Objectif & Utilité
 
-L'objectif unique de cet outil est d'automatiser la création de cartes Anki à partir de captures d'écran de l'application mobile et tablette **Chineasy**.
+Cet outil permet d'automatiser l'apprentissage du chinois Mandarin sur Anki via deux sources d'apprentissage majeures :
 
-### Prise en charge des deux modes de captures :
-
-1. **Cartes Chineasy Classiques (Paires de 2 captures)** :
-   - Capture 1 : Illustration mnémotechnique visuelle.
-   - Capture 2 : Fiche de détail avec composition du caractère, Pinyin, traduction et phrase explicative.
-2. **Cartes "Word of the Day" (Capture unique combinée)** :
-   - 1 seule capture d'écran contenant simultanément l'illustration en haut et l'explication lexicographique en bas.
-
-### Fonctionnalités principales :
-
-- **Extraction 100% Dynamique** : Analyse OCR automatique par EasyOCR sans aucun dictionnaire ni texte codé en dur.
-- **Accélération Matérielle Apple Silicon (MPS GPU)** : Exploitation du processeur graphique Metal des puces Mac M1/M2/M3/M4 pour une rapidité d'extraction optimale.
-- **Détourage Transparent** : Isolation automatique des illustrations mnémotechniques et suppression du fond coloré (PNG transparent).
-- **Prononciation Audio HD Mandarin** : Récupération des enregistrements natifs humains avec respect des 4 tons via les API de dictionnaire (Youdao / Baidu).
-- **Génération Automatique de 2 Cartes par Note Anki** :
-  1. **Reconnaissance Visuelle** : Caractère Hanzi au recto -> Verso complet (Pinyin, Son HD, Traduction, Explication, Illustration).
-  2. **Écoute & Écriture** : Audio seul au recto + champ de saisie acceptant le Pinyin OU les caractères chinois (Hanzi) + tableau blanc HTML5 (Canvas) pour dessiner les traits -> Correction au verso.
-- **Rendu Adaptatif Light Mode & Dark Mode** : Support du mode clair et du mode nuit (`#2c2c2c`) pour la zone de saisie, le canvas et la typographie.
-- **Auto-Correction des Coquilles OCR** : Récupération automatique du titre anglais propre sur l'illustration mnémotechnique pour auto-guérir les erreurs d'OCR sur les fiches de détail.
+1. **Captures d'écran Chineasy** (Deck `chinois::chineasy_characters`) :
+   - Traitement des illustrations mnémotechniques, détourage PNG transparent, analyse OCR 100% dynamique et génération de 2 cartes Anki par note.
+2. **Fiches de cours PDF Yoyo Chinese** (Deck `chinois::yoyo_chinese`) :
+   - Conversion automatique des PDF de leçons Yoyo Chinese en Markdown.
+   - Extraction des paires Vocabulaire + Phrases d'exemple en Chinois Simplifié.
+   - Génération audio HD Mandarin native et création de 2 cartes par note dans le deck dédié `chinois::yoyo_chinese`.
 
 ---
 
@@ -35,8 +22,8 @@ L'objectif unique de cet outil est d'automatiser la création de cartes Anki à 
 ### Prérequis
 
 1. Python 3.10 ou version supérieure.
-2. macOS (avec support natif Apple Silicon GPU via Metal MPS) ou Linux / Windows.
-3. Anki Desktop ouvert avec l'extension AnkiConnect (Code d'extension Anki : 2055492159).
+2. macOS (avec support GPU Metal MPS) ou Linux / Windows.
+3. Anki Desktop ouvert avec l'extension AnkiConnect (Code : 2055492159).
 
 ### Installation
 
@@ -56,16 +43,6 @@ pip install -r requirements.txt
 
 ## 3. Utilisation
 
-### Mode Ligne de Commande (CLI)
-
-Placez vos captures d'écran dans un sous-dossier de `captures/` (par exemple `captures/20_07_2026`), puis lancez :
-
-```bash
-python main.py captures/20_07_2026
-```
-
-Le script traite les images, génère les fichiers audio et média, synchronise les cartes directement dans Anki Desktop via AnkiConnect, puis renomme le dossier traité avec le suffixe `_PROCESSED`.
-
 ### Mode Interface Web (GUI)
 
 ```bash
@@ -74,18 +51,29 @@ python app.py
 
 Ouvrez votre navigateur à l'adresse : `http://127.0.0.1:5001`
 
+- **Onglet Chineasy** : Sélectionnez un dossier de captures d'écran et lancez l'extraction.
+- **Onglet Yoyo Chinese** : Glissez-déposez un fichier PDF de cours Yoyo Chinese (ou sélectionnez un fichier dans `pdf_input/`) pour convertir le PDF en Markdown et importer automatiquement le vocabulaire et les phrases dans Anki.
+
+### Mode Ligne de Commande (CLI)
+
+- **Traitement Chineasy** :
+  ```bash
+  python main.py captures/20_07_2026
+  ```
+
+- **Traitement Yoyo Chinese PDF** :
+  ```bash
+  python src/yoyo_parser.py /chemin/vers/votre/cours.pdf
+  ```
+
 ---
 
-## 4. Architecture & Fallbacks
+## 4. Architecture & Modèles Anki
 
-| Composant | Bibliothèques & Outils | Fonctionnement & Fallbacks |
-| :--- | :--- | :--- |
-| **Accélération** | PyTorch (MPS / Metal) | GPU Apple Silicon (M1/M2/M3/M4) avec variable `PYTORCH_ENABLE_MPS_FALLBACK=1`. Fallback : CUDA / CPU. |
-| **OCR** | easyocr, pypinyin, re | Regroupement par lignes Y. Fusion des caractères CJK adjacents. Pinyin généré automatiquement. |
-| **Traitement Image** | Pillow, opencv-python, numpy | Échantillonnage 4 coins, masque de distance RGB, masquage UI iOS et découpage adaptatif Word of the Day. |
-| **Appariement** | Python (card_matcher) | 1. Cartes Word of the Day combinées. 2. Séquence adjacente (N-1). 3. Mot-clé anglais avec auto-correction. |
-| **Audio** | requests, edge-tts, gTTS | 1. Dictionnaire Youdao HD (voix humaines studio). 2. Baidu Speech. 3. Fallback Edge-TTS (-20%). 4. gTTS. |
-| **Export Anki** | requests, genanki | 1. AnkiConnect (ports 8766 / 8765) avec dédoublonnage strict. 2. Paquet autonome genanki (.apkg). |
+| Source | Deck Anki Cible | Modèle de Note | Cartes Générées par Note |
+| :--- | :--- | :--- | :--- |
+| **Chineasy Captures** | `chinois::chineasy_characters` | `Chineasy Character Model v3` | 1. Reconnaissance Visuelle<br>2. Écoute Audio & Écriture (Canvas + Input) |
+| **Yoyo Chinese PDF** | `chinois::yoyo_chinese` | `Yoyo Chinese Model` | 1. Reconnaissance Visuelle<br>2. Écoute Audio & Écriture (Canvas + Input) |
 
 ---
 
@@ -96,20 +84,3 @@ Ouvrez votre navigateur à l'adresse : `http://127.0.0.1:5001`
 | RECTO (Front) : Caractère Seul | VERSO (Back) : Fiche Complète avec Illustration |
 | :---: | :---: |
 | ![Carte Anki Recto 人](docs/images/card_recto_person.png) | ![Carte Anki Verso 人](docs/images/anki_card1_verso_person.png) |
-
-### Déroulement du Traitement
-
-1. Déposer les captures d'écran dans `captures/session_demo/` :
-   - `captures/session_demo/IMG_9214.PNG` (Illustration)
-   - `captures/session_demo/IMG_9215.PNG` (Détail)
-   - `captures/session_demo/IMG_9999.PNG` (Word of the Day pour 吃)
-
-2. Exécuter la commande :
-   ```bash
-   python main.py captures/session_demo
-   ```
-
-3. Résultat obtenu dans le deck Anki `chinois::chineasy_characters` :
-   - **Carte 1 (Reconnaissance Visuelle)** : Hanzi au recto -> Verso avec Pinyin, Audio HD natif, Traduction, Explication complète avec retours à la ligne exacts, et l'image mnémotechnique détourée transparente.
-   - **Carte 2 (Écoute & Écriture)** : Lecture audio au recto + zone de saisie acceptant le Pinyin OU les caractères chinois (Hanzi) + tableau blanc HTML5 pour tracer le caractère -> Verso avec la correction complète.
-   - Le dossier `captures/session_demo` est automatiquement renommé en `captures/session_demo_PROCESSED`.
