@@ -1,23 +1,32 @@
 # Chineasy to Anki Studio
 
-Module de traitement d'images et d'importation automatique de cartes Anki à partir de captures d'écran de l'application Chineasy.
+Module de traitement d'images, d'extraction OCR et d'importation automatique de cartes Anki à partir de captures d'écran de l'application Chineasy.
 
 ---
 
 ## 1. Objectif & Utilité
 
-L'objectif unique de cet outil est d'automatiser la création de cartes Anki à partir de captures d'écran de l'application mobile ou tablette **Chineasy**.
+L'objectif unique de cet outil est d'automatiser la création de cartes Anki à partir de captures d'écran de l'application mobile et tablette **Chineasy**.
 
-Fonctionnalités principales :
+### Prise en charge des deux modes de captures :
 
-- Extraction OCR des caractères simples (ex: 人, 火, 大, 小) et des mots composés de plusieurs caractères (ex: 人人, 大人, 小人, 大小, 火山, 大火).
-- Reconstitution fidèle du texte d'explication avec retours à la ligne exacts (<br>) et correction des coupures OCR.
-- Détourage transparent des illustrations mnémotechniques par analyse des couleurs de fond et suppression de l'interface mobile iOS.
-- Prononciation audio HD en mandarin avec respect des 4 tons via les API vocales de dictionnaire chinois (Youdao / Baidu).
-- Génération automatique de 2 cartes par note Anki :
-  1. Reconnaissance Visuelle : Hanzi au recto -> Verso complet (Pinyin, Son, Traduction, Explication, Image).
-  2. Écoute & Écriture : Audio seul au recto + champ de saisie Pinyin + tableau blanc HTML5 (Canvas) pour dessiner les traits -> Correction au verso.
-- Synchronisation AnkiConnect vers le paquet `chinois::chineasy_characters` et interface web locale (Flask).
+1. **Cartes Chineasy Classiques (Paires de 2 captures)** :
+   - Capture 1 : Illustration mnémotechnique visuelle.
+   - Capture 2 : Fiche de détail avec composition du caractère, Pinyin, traduction et phrase explicative.
+2. **Cartes "Word of the Day" (Capture unique combinée)** :
+   - 1 seule capture d'écran contenant simultanément l'illustration en haut et l'explication lexicographique en bas.
+
+### Fonctionnalités principales :
+
+- **Extraction 100% Dynamique** : Analyse OCR automatique par EasyOCR sans aucun dictionnaire ni texte codé en dur.
+- **Accélération Matérielle Apple Silicon (MPS GPU)** : Exploitation du processeur graphique Metal des puces Mac M1/M2/M3/M4 pour une rapidité d'extraction optimale.
+- **Détourage Transparent** : Isolation automatique des illustrations mnémotechniques et suppression du fond coloré (PNG transparent).
+- **Prononciation Audio HD Mandarin** : Récupération des enregistrements natifs humains avec respect des 4 tons via les API de dictionnaire (Youdao / Baidu).
+- **Génération Automatique de 2 Cartes par Note Anki** :
+  1. **Reconnaissance Visuelle** : Caractère Hanzi au recto -> Verso complet (Pinyin, Son HD, Traduction, Explication, Illustration).
+  2. **Écoute & Écriture** : Audio seul au recto + champ de saisie acceptant le Pinyin OU les caractères chinois (Hanzi) + tableau blanc HTML5 (Canvas) pour dessiner les traits -> Correction au verso.
+- **Rendu Adaptatif Light Mode & Dark Mode** : Support du mode clair et du mode nuit (`#2c2c2c`) pour la zone de saisie, le canvas et la typographie.
+- **Auto-Correction des Coquilles OCR** : Récupération automatique du titre anglais propre sur l'illustration mnémotechnique pour auto-guérir les erreurs d'OCR sur les fiches de détail.
 
 ---
 
@@ -26,7 +35,8 @@ Fonctionnalités principales :
 ### Prérequis
 
 1. Python 3.10 ou version supérieure.
-2. Anki Desktop ouvert avec l'extension AnkiConnect (Code extension : 2055492159).
+2. macOS (avec support natif Apple Silicon GPU via Metal MPS) ou Linux / Windows.
+3. Anki Desktop ouvert avec l'extension AnkiConnect (Code d'extension Anki : 2055492159).
 
 ### Installation
 
@@ -54,30 +64,34 @@ Placez vos captures d'écran dans un sous-dossier de `captures/` (par exemple `c
 python main.py captures/20_07_2026
 ```
 
+Le script traite les images, génère les fichiers audio et média, synchronise les cartes directement dans Anki Desktop via AnkiConnect, puis renomme le dossier traité avec le suffixe `_PROCESSED`.
+
 ### Mode Interface Web (GUI)
 
 ```bash
 python app.py
 ```
+
 Ouvrez votre navigateur à l'adresse : `http://127.0.0.1:5001`
 
 ---
 
 ## 4. Architecture & Fallbacks
 
-| Composant | Bibliothèques | Fonctionnement & Fallbacks |
+| Composant | Bibliothèques & Outils | Fonctionnement & Fallbacks |
 | :--- | :--- | :--- |
-| OCR | easyocr, pypinyin, re | EasyOCR avec regroupement par coordonnées Y de ligne. Fallback : Ollama Vision (llama3.2-vision). |
-| Image | Pillow, opencv-python, numpy | Échantillonnage du fond coloré 4 coins, masque de distance RGB, rognage et masquage status bar iOS. |
-| Appariement | Python | 1. Mot-clé anglais. 2. Recherche histoire. 3. Séquence d'images adjacentes (N-1 -> N). |
-| Audio | requests, edge-tts, gTTS | 1. Dictionnaire Youdao & Baidu Speech (voix humaines HD 4 tons). 2. Edge-TTS (-20%). 3. gTTS. |
-| Export Anki | requests, genanki | 1. AnkiConnect (ports 8766 / 8765) avec dédoublonnage automatique. 2. Paquet autonome genanki (.apkg). |
+| **Accélération** | PyTorch (MPS / Metal) | GPU Apple Silicon (M1/M2/M3/M4) avec variable `PYTORCH_ENABLE_MPS_FALLBACK=1`. Fallback : CUDA / CPU. |
+| **OCR** | easyocr, pypinyin, re | Regroupement par lignes Y. Fusion des caractères CJK adjacents. Pinyin généré automatiquement. |
+| **Traitement Image** | Pillow, opencv-python, numpy | Échantillonnage 4 coins, masque de distance RGB, masquage UI iOS et découpage adaptatif Word of the Day. |
+| **Appariement** | Python (card_matcher) | 1. Cartes Word of the Day combinées. 2. Séquence adjacente (N-1). 3. Mot-clé anglais avec auto-correction. |
+| **Audio** | requests, edge-tts, gTTS | 1. Dictionnaire Youdao HD (voix humaines studio). 2. Baidu Speech. 3. Fallback Edge-TTS (-20%). 4. gTTS. |
+| **Export Anki** | requests, genanki | 1. AnkiConnect (ports 8766 / 8765) avec dédoublonnage strict. 2. Paquet autonome genanki (.apkg). |
 
 ---
 
 ## 5. Exemple Pratique d'Utilisation
 
-### 1. Captures d'Écran d'Entrée (Chineasy)
+### 1. Captures d'Écran d'Entrée (Application Chineasy)
 
 | Capture Illustration (IMG_9214.PNG) | Capture Fiche Détail (IMG_9215.PNG) |
 | :---: | :---: |
@@ -91,17 +105,20 @@ Ouvrez votre navigateur à l'adresse : `http://127.0.0.1:5001`
 
 ### 3. Déroulement du Traitement
 
-1. Déposer les deux fichiers dans `captures/session_adult/` :
-   - `captures/session_adult/IMG_9214.PNG` (Illustration)
-   - `captures/session_adult/IMG_9215.PNG` (Détail)
+1. Déposer les captures d'écran dans `captures/session_demo/` :
+   - `captures/session_demo/IMG_9214.PNG` (Illustration)
+   - `captures/session_demo/IMG_9215.PNG` (Détail)
+   - `captures/session_demo/IMG_9999.PNG` (Word of the Day pour 吃)
 
 2. Exécuter la commande :
    ```bash
-   python main.py captures/session_adult
+   python main.py captures/session_demo
    ```
 
-3. Résultat obtenu dans Anki :
-   - Le paquet `chinois::chineasy_characters` reçoit la note **大人**.
-   - **Carte 1 (Visuelle)** : Recto avec "大人" -> Verso avec "大人", Pinyin "dà rén", Audio MP3 "audio_zh_大人.mp3", Traduction "Adult", Explication complète avec retours à la ligne exacts, et l'image transparente détourée.
-   - **Carte 2 (Écoute & Écriture)** : Recto avec la lecture audio "dà rén", la case pour taper "dà rén" et le tableau blanc HTML5 pour tracer le caractère -> Verso avec la correction complète.
-   - Le dossier `captures/session_adult` est automatiquement renommé en `captures/session_adult_PROCESSED`.
+3. Résultat obtenu dans le deck Anki `chinois::chineasy_characters` :
+   - **Note 大人 (Adult)** :
+     - **Carte 1 (Visuelle)** : Hanzi "大人" au recto -> Verso avec Pinyin "dà rén", Audio HD, Traduction "Adult", Explication complète avec retours à la ligne exacts, et l'image transparente détourée.
+     - **Carte 2 (Écoute & Écriture)** : Audio seul "dà rén" au recto + zone de saisie validant le Pinyin ("da ren") OU les caractères ("大人") + tableau blanc HTML5 pour dessiner les traits -> Verso avec la correction complète.
+   - **Note 吃 (To Eat)** :
+     - Générée automatiquement à partir de la capture unique *Word of the Day* avec ses 2 cartes associées.
+   - Le dossier `captures/session_demo` est automatiquement renommé en `captures/session_demo_PROCESSED`.

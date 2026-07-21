@@ -1,15 +1,20 @@
 """
 Module d'extraction du texte et d'analyse des cartes Chineasy via OCR (EasyOCR).
-Extraction 100% DYNAMIQUE et automatique pour n'importe quelle nouvelle capture 
-(Chineasy Classique & Word of the Day) sans dédoublonner à la main ni dépendre de dictionnaires.
+Accélération matérielle forcée sur Apple Silicon MPS (Metal Performance Shaders).
+Extraction 100% DYNAMIQUE et automatique sans dépendre de dictionnaires codés en dur.
 """
 
 import os
 import re
 import json
 import requests
+import torch
 import pypinyin
 from typing import Dict, Any, Optional
+
+# Activer l'accélération matérielle Apple Silicon (MPS) & PyTorch Fallback
+if torch.backends.mps.is_available():
+    os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
 
 _reader = None
 
@@ -18,10 +23,19 @@ def get_easyocr_reader():
     if _reader is None:
         try:
             import easyocr
-            _reader = easyocr.Reader(['ch_sim', 'en'], gpu=False)
+            if torch.backends.mps.is_available():
+                print("[OCR] Accélération matérielle activée sur : APPLE SILICON (MPS GPU)")
+                _reader = easyocr.Reader(['ch_sim', 'en'], gpu=True)
+            elif torch.cuda.is_available():
+                print("[OCR] Accélération matérielle activée sur : NVIDIA CUDA GPU")
+                _reader = easyocr.Reader(['ch_sim', 'en'], gpu=True)
+            else:
+                print("[OCR] Exécution sur CPU")
+                _reader = easyocr.Reader(['ch_sim', 'en'], gpu=False)
         except Exception as e:
-            print(f"[OCR] EasyOCR non disponible: {e}")
-            _reader = False
+            print(f"[OCR] Repli sur CPU (Erreur initialisation GPU: {e})")
+            import easyocr
+            _reader = easyocr.Reader(['ch_sim', 'en'], gpu=False)
     return _reader
 
 def is_cjk_char(ch: str) -> bool:
@@ -100,7 +114,7 @@ def group_text_boxes_by_line(ocr_results: list, y_tolerance: int = 15) -> list:
 
 def extract_with_easyocr(image_path: str) -> Optional[Dict[str, Any]]:
     """
-    Extrait 100% DYNAMIQUEMENT les informations de n'importe quelle nouvelle capture d'écran.
+    Extrait 100% DYNAMIQUEMENT les informations de n'importe quelle nouvelle capture d'écran sur GPU MPS.
     """
     reader = get_easyocr_reader()
     if not reader:
@@ -119,7 +133,6 @@ def extract_with_easyocr(image_path: str) -> Optional[Dict[str, Any]]:
         full_text_lower = full_text.lower()
         is_word_of_the_day = bool(re.search(r'word\s+of', full_text_lower) or "ofthe day" in full_text_lower or "word of" in full_text_lower)
         
-        # Extraire les blocs CJK en joignant les espaces parasites inter-caractères
         joined_text = re.sub(r'([\u4e00-\u9fff])\s+([\u4e00-\u9fff])', r'\1\2', full_text)
         cjk_blocks = re.findall(r'[\u4e00-\u9fff]+', joined_text)
 
@@ -180,7 +193,7 @@ def extract_with_easyocr(image_path: str) -> Optional[Dict[str, Any]]:
                 "story": ""
             }
             
-        # Carte Détail Classique : Extraction dynamique du Hanzi principal avec fusion inter-caractères
+        # Carte Détail Classique
         clean_cjk = []
         for c in cjk_blocks:
             if c not in ['八', '十', '二'] and c not in clean_cjk:
@@ -231,7 +244,7 @@ def extract_with_easyocr(image_path: str) -> Optional[Dict[str, Any]]:
             "story": story
         }
     except Exception as e:
-        print(f"[OCR] Erreur pendant l'analyse EasyOCR: {e}")
+        print(f"[OCR Erreur] {e}")
         return None
 
 def extract_card_info(image_path: str) -> Dict[str, Any]:
