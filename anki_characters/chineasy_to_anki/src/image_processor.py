@@ -1,8 +1,8 @@
 """
 Module de traitement d'image et de suppression du fond pour les cartes Chineasy.
 Échantillonne la couleur des coins, génère un fond transparent avec anti-aliasing,
-masque la barre d'état système et les icônes UI, et recadre l'illustration mnémotechnique.
-Prise en charge native du découpage des cartes combinées 'Word of the Day'.
+masque la barre d'état système et les bruits UI, et recadre l'illustration mnémotechnique.
+Prise en charge native des cartes combinées 'Word of the Day'.
 """
 
 import os
@@ -74,7 +74,8 @@ def remove_background(
         bottom_right_mask_y = int(height * 0.80)
         bottom_right_mask_x = int(width * 0.70)
         alpha[bottom_right_mask_y:, bottom_right_mask_x:] = 0
-    elif height > width * 1.3:  # Capture smartphone classique
+    else:
+        # Masquage standard de la barre d'état et des marges supérieures/inférieures
         top_crop_margin = int(height * 0.16)
         bottom_crop_margin = int(height * 0.12)
         alpha[:top_crop_margin, :] = 0

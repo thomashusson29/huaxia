@@ -2,6 +2,7 @@
 Module d'extraction du texte et d'analyse des cartes Chineasy via OCR (EasyOCR).
 Accélération matérielle forcée sur Apple Silicon MPS (Metal Performance Shaders).
 Extraction 100% DYNAMIQUE et automatique sans dépendre de dictionnaires codés en dur.
+Gestion robuste des captures d'écran rognées (sans texte).
 """
 
 import os
@@ -115,6 +116,7 @@ def group_text_boxes_by_line(ocr_results: list, y_tolerance: int = 15) -> list:
 def extract_with_easyocr(image_path: str) -> Optional[Dict[str, Any]]:
     """
     Extrait 100% DYNAMIQUEMENT les informations de n'importe quelle nouvelle capture d'écran sur GPU MPS.
+    Si une image n'a aucun texte (ex: capture rognée de l'illustration), elle est classée automatiquement comme carte MNEMONIC.
     """
     reader = get_easyocr_reader()
     if not reader:
@@ -122,12 +124,17 @@ def extract_with_easyocr(image_path: str) -> Optional[Dict[str, Any]]:
         
     try:
         raw_results = reader.readtext(image_path, detail=1)
-        if not raw_results:
-            return None
-            
-        lines = group_text_boxes_by_line(raw_results)
+        lines = group_text_boxes_by_line(raw_results) if raw_results else []
+        
+        # --- CAS ROIS: Image sans texte (ex: capture rognée d'illustration mnémotechnique) ---
         if not lines:
-            return None
+            return {
+                "card_type": "mnemonic",
+                "hanzi": "",
+                "pinyin": "",
+                "english": "",
+                "story": ""
+            }
             
         full_text = " ".join(lines)
         full_text_lower = full_text.lower()
@@ -254,7 +261,7 @@ def extract_card_info(image_path: str) -> Dict[str, Any]:
     else:
         res = {
             "file_path": image_path,
-            "card_type": "unknown",
+            "card_type": "mnemonic",
             "hanzi": "",
             "pinyin": "",
             "english": "",

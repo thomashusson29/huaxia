@@ -189,6 +189,7 @@
             <div class="field-group">
                 <input type="text" id="folder-input" value="captures" placeholder="captures/...">
                 <button id="btn-start" onclick="startProcessing()">Lancer</button>
+                <button id="btn-sync-obsidian" onclick="syncObsidian()" style="background:#0284c7; color:#fff; border:none;"> Synchroniser vers Obsidian</button>
             </div>
             <div class="folder-list" id="folder-list"></div>
         </div>
@@ -263,6 +264,36 @@
 
         function playAudio(url) {
             new Audio(url).play();
+        }
+
+        function syncObsidian() {
+            const btn = document.getElementById('btn-sync-obsidian');
+            const terminal = document.getElementById('terminal');
+            btn.disabled = true;
+            btn.textContent = 'Synchronisation...';
+            terminal.textContent += '\n[Obsidian] Lancement de la synchronisation vers Obsidian...\n';
+            
+            fetch('/api/export_obsidian', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ deck_name: 'chinois::chineasy_characters' })
+            })
+            .then(res => res.json())
+            .then(data => {
+                btn.disabled = false;
+                btn.textContent = ' Synchroniser vers Obsidian';
+                if (data.success) {
+                    terminal.textContent += `[Obsidian] Succès ! ${data.exported_count} note(s) exportée(s) (${data.copied_media_count} médias copiés).\n`;
+                } else {
+                    terminal.textContent += `[Obsidian Erreur] ${data.error}\n`;
+                }
+                terminal.scrollTop = terminal.scrollHeight;
+            })
+            .catch(err => {
+                btn.disabled = false;
+                btn.textContent = ' Synchroniser vers Obsidian';
+                terminal.textContent += `[Obsidian Erreur] ${err}\n`;
+            });
         }
 
         function renderCards(cards) {

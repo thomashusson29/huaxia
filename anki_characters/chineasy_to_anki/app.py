@@ -20,6 +20,7 @@ from src.image_processor import remove_background
 from src.card_matcher import match_cards
 from src.audio_generator import generate_audio_sync
 from src.anki_exporter import export_to_anki
+from src.anki_to_obsidian import export_anki_notes_to_obsidian
 
 app = Flask(__name__, template_folder="templates")
 
@@ -157,8 +158,17 @@ def process_stream():
                             print(f"  [Erreur Audio] {e}")
 
                 # 6. Exportation Anki
-                print("[6/6] Exportation vers Anki...")
+                print("[6/7] Exportation vers Anki...")
                 export_to_anki(paired_cards)
+
+                # 7. Synchronisation Obsidian
+                print("[7/7] Synchronisation vers le coffre Obsidian...")
+                try:
+                    res_obs = export_anki_notes_to_obsidian()
+                    if res_obs.get("success"):
+                        print(f"  [OK Obsidian] {res_obs.get('exported_count')} fiches exportées dans {res_obs.get('target_dir')}.")
+                except Exception as e_obs:
+                    print(f"  [Avertissement Obsidian] {e_obs}")
                 
                 # Formater les cartes pour le rendu JSON Web
                 for c in paired_cards:
@@ -201,6 +211,17 @@ def process_stream():
         yield f"data: {json.dumps({'type': 'result', 'cards': cards_result})}\n\n"
 
     return Response(event_stream(), mimetype="text/event-stream")
+
+@app.route("/api/export_obsidian", methods=["POST"])
+def export_obsidian():
+    """Endpoint pour exporter manuellement toutes les cartes Anki vers Obsidian."""
+    req_data = request.get_json(silent=True) or {}
+    deck_name = req_data.get("deck_name", "chinois::chineasy_characters")
+    try:
+        res = export_anki_notes_to_obsidian(deck_name=deck_name)
+        return jsonify(res)
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 if __name__ == "__main__":
     port = 5001
