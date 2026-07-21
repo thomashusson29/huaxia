@@ -1,6 +1,7 @@
 """
 Module d'exportation vers Anki via AnkiConnect (API local ports 8766 / 8765) 
-avec génération audio automatique systématique, recherche exacte du Hanzi et rendu adaptatif Mode Clair / Mode Nuit (#2c2c2c).
+avec génération audio automatique systématique, recherche exacte du Hanzi, tags hiérarchisés 
+et rendu adaptatif Mode Clair / Mode Nuit (#2c2c2c).
 Prise en charge de Chineasy (chinois::chineasy_characters) et de Yoyo Chinese (chinois::yoyo_chinese).
 """
 
@@ -405,12 +406,16 @@ def export_via_ankiconnect(cards: List[Dict[str, Any]], target_deck: str = DECK_
             "Audio": audio_sound_tag
         }
 
+        # Définition des tags
+        default_tags = ["chinois", "chineasy"] if target_deck == DECK_NAME else ["chinois", "yoyochinese"]
+        card_tags = card.get("tags") or default_tags
+
         existing_notes = find_exact_note_ids_for_hanzi(hanzi, target_deck)
 
         if existing_notes:
             primary_id = existing_notes[0]
-            invoke_ankiconnect("updateNoteFields", note={"id": primary_id, "fields": note_fields})
-            print(f"  [Mise à jour] Note '{hanzi}' (ID: {primary_id}) mise à jour.")
+            invoke_ankiconnect("updateNoteFields", note={"id": primary_id, "fields": note_fields, "tags": card_tags})
+            print(f"  [Mise à jour] Note '{hanzi}' (ID: {primary_id}) mise à jour avec tags : {card_tags}.")
             updated_count += 1
             
             if len(existing_notes) > 1:
@@ -422,6 +427,7 @@ def export_via_ankiconnect(cards: List[Dict[str, Any]], target_deck: str = DECK_
                 "deckName": target_deck,
                 "modelName": target_model,
                 "fields": note_fields,
+                "tags": card_tags,
                 "options": {
                     "allowDuplicate": False,
                     "duplicateScope": "deck"
@@ -429,12 +435,12 @@ def export_via_ankiconnect(cards: List[Dict[str, Any]], target_deck: str = DECK_
             }
             try:
                 note_id = invoke_ankiconnect("addNote", note=note_payload)
-                print(f"  [OK Note] Note '{hanzi}' (ID: {note_id}) générée dans '{target_deck}'.")
+                print(f"  [OK Note] Note '{hanzi}' (ID: {note_id}) générée avec tags {card_tags}.")
                 added_count += 1
             except Exception as err:
                 note_payload["options"]["allowDuplicate"] = True
                 note_id = invoke_ankiconnect("addNote", note=note_payload)
-                print(f"  [OK Duplicate Allowed] Note '{hanzi}' ajoutée.")
+                print(f"  [OK Duplicate Allowed] Note '{hanzi}' ajoutée avec tags {card_tags}.")
                 added_count += 1
 
     print(f"[AnkiConnect] Synchronisation terminée pour {target_deck} : {added_count} note(s) créée(s), {updated_count} mise(s) à jour.")
@@ -486,6 +492,9 @@ def export_via_genanki(cards: List[Dict[str, Any]], output_apkg_path: str = "Chi
         if card.get("literal"):
             story_text = f"{card.get('literal')}\n\n{story_text}".strip()
 
+        default_tags = ["chinois", "chineasy"] if target_deck == DECK_NAME else ["chinois", "yoyochinese"]
+        card_tags = card.get("tags") or default_tags
+
         note = genanki.Note(
             model=my_model,
             fields=[
@@ -495,7 +504,8 @@ def export_via_genanki(cards: List[Dict[str, Any]], output_apkg_path: str = "Chi
                 story_text,
                 img_html,
                 audio_sound_tag
-            ]
+            ],
+            tags=card_tags
         )
         my_deck.add_note(note)
 

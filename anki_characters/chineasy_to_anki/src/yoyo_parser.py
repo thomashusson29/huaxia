@@ -2,8 +2,8 @@
 Module de conversion PDF vers Markdown et de parsing structuré pour Yoyo Chinese.
 Extrait le vocabulaire et les phrases des fiches de cours PDF Yoyo Chinese,
 génère un fichier Markdown propre avec tableaux et uniquement des caractères chinois simplifiés,
+génère les tags Anki appropriés (chinois, yoyochinese, unit1, lesson1, etc.)
 et l'enregistre à la fois dans le dossier du PDF d'origine et dans output_markdown/.
-Intègre également une option d'embellissement via Ollama (Qwen).
 """
 
 import os
@@ -97,6 +97,28 @@ def filter_simplified_cjk_list(cjk_lines: List[str]) -> List[str]:
             idx += 1
     return res
 
+def build_tags_for_yoyo_item(lesson_title: str, base_filename: str, category: str) -> List[str]:
+    """
+    Génère une liste de tags Anki propres et hiérarchisés pour un élément Yoyo Chinese.
+    Exemples de tags : ['chinois', 'yoyochinese', 'unit1', 'lesson1', 'vocabulary']
+    """
+    tags = ["chinois", "yoyochinese"]
+    
+    full_text = f"{lesson_title} {base_filename}".lower()
+    
+    m_unit = re.search(r'unit[-_\s]*(\d+)', full_text)
+    if m_unit:
+        tags.append(f"unit{int(m_unit.group(1))}")
+        
+    m_lesson = re.search(r'lesson[-_\s]*(\d+)', full_text)
+    if m_lesson:
+        tags.append(f"lesson{int(m_lesson.group(1))}")
+
+    if category:
+        tags.append(category.lower())
+
+    return list(dict.fromkeys(tags)) # Éliminer les doublons éventuels
+
 def generate_clean_markdown(lesson_title: str, items: List[Dict[str, Any]]) -> str:
     """
     Génère un document Markdown propre avec des tableaux comparatifs (Vocabulaire et Phrases)
@@ -154,20 +176,19 @@ Consignes STRICTES :
         }, timeout=15)
         if res.status_code == 200:
             resp_text = res.json().get("response", "").strip()
-            # Nettoyer les balises de bloc de code ```markdown s'il y en a
             resp_text = re.sub(r'^```markdown\s*', '', resp_text)
             resp_text = re.sub(r'^```\s*', '', resp_text)
             resp_text = re.sub(r'\s*```$', '', resp_text)
             if resp_text and "| Caractère Simplifié |" in resp_text:
                 return resp_text
     except Exception as e:
-        print(f"[Ollama Warning] Ollama non disponible ou délai dépassé ({e}), utilisation du Markdown généré.")
+        print(f"[Ollama Warning] Ollama non disponible ({e}), utilisation du Markdown généré.")
     return markdown_content
 
 def parse_yoyo_pdf(pdf_path: str, output_md_dir: str = "output_markdown", use_ollama: bool = True) -> Dict[str, Any]:
     """
     Analyse un fichier PDF Yoyo Chinese, génère des tableaux Markdown avec caractères simplifiés uniques,
-    et enregistre le document Markdown dans le dossier du PDF d'origine ET dans output_markdown/.
+    construit les tags Anki appropriés et enregistre le document Markdown.
     """
     lines = extract_pdf_raw_lines(pdf_path)
     base_name = os.path.splitext(os.path.basename(pdf_path))[0]
@@ -205,13 +226,15 @@ def parse_yoyo_pdf(pdf_path: str, output_md_dir: str = "output_markdown", use_ol
         cjk_clean = filter_simplified_cjk_list(cjk_list)
         min_len = min(len(eng_list), len(pinyin_list), len(cjk_clean))
         for i in range(min_len):
+            item_tags = build_tags_for_yoyo_item(lesson_title, base_name, "Vocabulary")
             items.append({
                 "hanzi": cjk_clean[i],
                 "pinyin": pinyin_list[i],
                 "english": eng_list[i],
                 "literal": "",
                 "category": "Vocabulary",
-                "lesson": lesson_title
+                "lesson": lesson_title,
+                "tags": item_tags
             })
 
     # Section 2 : Vocabulaire
@@ -244,13 +267,15 @@ def parse_yoyo_pdf(pdf_path: str, output_md_dir: str = "output_markdown", use_ol
         min_len = min(len(clean_eng), len(pinyin_items), len(cjk_clean))
         for k in range(min_len):
             eng_val, lit_val = clean_eng[k]
+            item_tags = build_tags_for_yoyo_item(lesson_title, base_name, "Vocabulary")
             items.append({
                 "hanzi": cjk_clean[k],
                 "pinyin": pinyin_items[k],
                 "english": eng_val,
                 "literal": lit_val,
                 "category": "Vocabulary",
-                "lesson": lesson_title
+                "lesson": lesson_title,
+                "tags": item_tags
             })
 
     # Section 3 : Sentences
@@ -269,13 +294,15 @@ def parse_yoyo_pdf(pdf_path: str, output_md_dir: str = "output_markdown", use_ol
         cjk_clean = filter_simplified_cjk_list(cjk_sents)
         min_len = min(len(eng_sents), len(pinyin_sents), len(cjk_clean))
         for k in range(min_len):
+            item_tags = build_tags_for_yoyo_item(lesson_title, base_name, "Sentence")
             items.append({
                 "hanzi": cjk_clean[k],
                 "pinyin": pinyin_sents[k],
                 "english": eng_sents[k],
                 "literal": "",
                 "category": "Sentence",
-                "lesson": lesson_title
+                "lesson": lesson_title,
+                "tags": item_tags
             })
 
     # Générer le document Markdown avec tableaux
