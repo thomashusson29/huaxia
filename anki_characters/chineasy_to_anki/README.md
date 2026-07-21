@@ -91,17 +91,17 @@ Ouvrez votre navigateur à l'adresse : `http://127.0.0.1:5001`
 
 ## 5. Exemple Pratique d'Utilisation
 
-### Cartes Anki Générées en Mode Clair (Light Mode)
+### Carte Anki Générée en Mode Clair (Recto vs Verso)
 
-| Carte 1 : Verso Visuel & Détails | Carte 2 : Recto Écoute & Écriture (Pinyin / Hanzi) |
+| RECTO (Front) : Écoute, Saisie & Dessin | VERSO (Back) : Correction & Fiche Complète |
 | :---: | :---: |
-| ![Carte 1 Visuelle Anki](docs/images/anki_card_visual_light.png) | ![Carte 2 Écriture Anki](docs/images/anki_card_writing_light.png) |
+| ![Carte Anki Recto](docs/images/anki_card2_recto_light.png) | ![Carte Anki Verso](docs/images/anki_card2_verso_light.png) |
 
-### Carte Anki Générée en Mode Nuit (Dark Mode `#2c2c2c`)
+### Verso de la Carte Anki en Mode Nuit (Dark Mode `#2c2c2c`)
 
-| Verso Complet Mode Nuit |
+| VERSO (Back) Mode Nuit |
 | :---: |
-| ![Carte Anki Mode Nuit](docs/images/anki_card_dark_mode.png) |
+| ![Carte Anki Verso Mode Nuit](docs/images/anki_card_verso_dark.png) |
 
 ### Déroulement du Traitement
 
