@@ -1,7 +1,7 @@
 """
 Module d'exportation vers Anki via AnkiConnect (API local ports 8766 / 8765) 
-avec génération audio automatique systématique, recherche exacte du Hanzi, tags hiérarchisés 
-et rendu adaptatif Mode Clair / Mode Nuit (#2c2c2c).
+avec génération audio automatique systématique, lecture audio automatique forcée au chargement des cartes,
+recherche exacte du Hanzi, tags hiérarchisés et rendu adaptatif Mode Clair / Mode Nuit (#2c2c2c).
 Prise en charge de Chineasy (chinois::chineasy_characters) et de Yoyo Chinese (chinois::yoyo_chinese).
 """
 
@@ -179,7 +179,7 @@ CARD1_FRONT = """
 CARD1_BACK = """
 <div class="card">
     <div class="hanzi" style="font-size: 60px;">{{Hanzi}}</div>
-    <div class="pinyin">{{Pinyin}} {{Audio}}</div>
+    <div class="pinyin">{{Pinyin}} <span class="audio-container">{{Audio}}</span></div>
     <div class="english">{{Anglais}}</div>
     {{#Explication}}
     <div class="story">{{Explication}}</div>
@@ -188,12 +188,25 @@ CARD1_BACK = """
     <div>{{ImageMnemo}}</div>
     {{/ImageMnemo}}
 </div>
+
+<script>
+(function() {
+    function triggerAudio() {
+        var btns = document.querySelectorAll('.audio-container a, .replay-button, a[href*="play:sound"], .soundLink');
+        btns.forEach(function(b) {
+            try { b.click(); } catch(e) {}
+        });
+    }
+    setTimeout(triggerAudio, 50);
+    setTimeout(triggerAudio, 300);
+})();
+</script>
 """
 
 CARD2_FRONT = """
 <div class="card">
     <div class="card-type-header">Écoute & Écriture (Pinyin ou Caractères)</div>
-    <div style="margin: 15px 0; transform: scale(1.3);">{{Audio}}</div>
+    <div class="audio-container" style="margin: 15px 0; transform: scale(1.3);">{{Audio}}</div>
     <div>{{type:Pinyin}}</div>
     
     <div class="canvas-container">
@@ -204,6 +217,15 @@ CARD2_FRONT = """
 
 <script>
 (function() {
+    function triggerAudio() {
+        var btns = document.querySelectorAll('.audio-container a, .replay-button, a[href*="play:sound"], .soundLink');
+        btns.forEach(function(b) {
+            try { b.click(); } catch(e) {}
+        });
+    }
+    setTimeout(triggerAudio, 50);
+    setTimeout(triggerAudio, 300);
+
     var canvas = document.getElementById('strokeCanvas');
     if (!canvas) return;
     var ctx = canvas.getContext('2d');
@@ -247,7 +269,7 @@ CARD2_BACK = """
     <div>{{type:Pinyin}}</div>
     
     <div class="hanzi" style="font-size: 65px; margin-top: 15px;">{{Hanzi}}</div>
-    <div class="pinyin">{{Pinyin}}</div>
+    <div class="pinyin">{{Pinyin}} <span class="audio-container">{{Audio}}</span></div>
     <div class="english">{{Anglais}}</div>
     {{#Explication}}
     <div class="story">{{Explication}}</div>
@@ -259,6 +281,15 @@ CARD2_BACK = """
 
 <script>
 (function() {
+    function triggerAudio() {
+        var btns = document.querySelectorAll('.audio-container a, .replay-button, a[href*="play:sound"], .soundLink');
+        btns.forEach(function(b) {
+            try { b.click(); } catch(e) {}
+        });
+    }
+    setTimeout(triggerAudio, 50);
+    setTimeout(triggerAudio, 300);
+
     var typeans = document.getElementById('typeans');
     if (!typeans) return;
     
@@ -406,7 +437,6 @@ def export_via_ankiconnect(cards: List[Dict[str, Any]], target_deck: str = DECK_
             "Audio": audio_sound_tag
         }
 
-        # Définition des tags
         default_tags = ["chinois", "chineasy"] if target_deck == DECK_NAME else ["chinois", "yoyochinese"]
         card_tags = card.get("tags") or default_tags
 
@@ -415,7 +445,7 @@ def export_via_ankiconnect(cards: List[Dict[str, Any]], target_deck: str = DECK_
         if existing_notes:
             primary_id = existing_notes[0]
             invoke_ankiconnect("updateNoteFields", note={"id": primary_id, "fields": note_fields, "tags": card_tags})
-            print(f"  [Mise à jour] Note '{hanzi}' (ID: {primary_id}) mise à jour avec tags : {card_tags}.")
+            print(f"  [Mise à jour] Note '{hanzi}' (ID: {primary_id}) mise à jour avec audio {audio_sound_tag} & tags {card_tags}.")
             updated_count += 1
             
             if len(existing_notes) > 1:
