@@ -1,17 +1,19 @@
 """
 Module de conversion PDF vers Markdown et de parsing structuré pour Yoyo Chinese.
 Extrait le vocabulaire et les phrases des fiches de cours PDF Yoyo Chinese,
-génère un fichier Markdown intermédiaire et retourne des structures d'objets prêtes pour Anki.
+génère un fichier Markdown propre avec tableaux et uniquement des caractères chinois simplifiés,
+et l'enregistre à la fois dans le dossier du PDF d'origine et dans output_markdown/.
+Intègre également une option d'embellissement via Ollama (Qwen).
 """
 
 import os
 import re
 import subprocess
 import unicodedata
+import requests
 from typing import List, Dict, Any, Tuple
 import pypdf
 
-# Plage Unicode des voyelles accentuées Pinyin
 PINYIN_TONE_CHARS = "āáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜĀÁǍÀĒÉĚÈĪÍǏÌŌÓǑÒŪÚǓÙǕǗǙǛ"
 
 def clean_text(text: str) -> str:
@@ -74,7 +76,7 @@ def extract_simplified_hanzi(text: str) -> str:
 def filter_simplified_cjk_list(cjk_lines: List[str]) -> List[str]:
     """
     Filtre une liste de lignes CJK alternant Simplifié/Traditionnel.
-    Ne saute la ligne suivante que s'il s'agit explicitement de la version traditionnelle (même longueur).
+    Ne conserve que les caractères simplifiés.
     """
     res = []
     idx = 0
@@ -83,10 +85,8 @@ def filter_simplified_cjk_list(cjk_lines: List[str]) -> List[str]:
         curr_clean = extract_simplified_hanzi(curr_raw)
         res.append(curr_clean)
         
-        # Si la ligne courante contenait déjà '/' (ex: 爱/愛), la version traditionnelle était sur la même ligne
         if '/' in curr_raw:
             idx += 1
-        # Si la ligne suivante existe, est CJK pur et de même longueur, c'est la ligne traditionnelle
         elif idx + 1 < len(cjk_lines):
             nxt = cjk_lines[idx + 1]
             if is_cjk_string(nxt) and '/' not in nxt and len(nxt) == len(curr_raw):
@@ -97,12 +97,81 @@ def filter_simplified_cjk_list(cjk_lines: List[str]) -> List[str]:
             idx += 1
     return res
 
-def parse_yoyo_pdf(pdf_path: str, output_md_dir: str = "output_markdown") -> Dict[str, Any]:
+def generate_clean_markdown(lesson_title: str, items: List[Dict[str, Any]]) -> str:
     """
-    Analyse un fichier PDF Yoyo Chinese et retourne la structure complète de la leçon et des cartes.
+    Génère un document Markdown propre avec des tableaux comparatifs (Vocabulaire et Phrases)
+    en utilisant EXCLUSIVEMENT des caractères chinois simplifiés.
+    """
+    md = [f"# {lesson_title}\n"]
+    
+    vocab_items = [it for it in items if it.get("category") == "Vocabulary"]
+    sentence_items = [it for it in items if it.get("category") == "Sentence"]
+    
+    if vocab_items:
+        md.append("## Vocabulaire\n")
+        md.append("| Anglais | Pinyin | Caractère Simplifié | Sens Littéral / Remarques |")
+        md.append("| :--- | :--- | :---: | :--- |")
+        for v in vocab_items:
+            eng = v.get("english", "").replace("|", "\\|")
+            pinyin = v.get("pinyin", "").replace("|", "\\|")
+            hanzi = v.get("hanzi", "").replace("|", "\\|")
+            literal = v.get("literal", "").replace("|", "\\|")
+            md.append(f"| {eng} | {pinyin} | {hanzi} | {literal} |")
+        md.append("")
+        
+    if sentence_items:
+        md.append("## Phrases d'exemple (Sentences)\n")
+        md.append("| Anglais | Pinyin | Phrase Simplifiée |")
+        md.append("| :--- | :--- | :---: |")
+        for s in sentence_items:
+            eng = s.get("english", "").replace("|", "\\|")
+            pinyin = s.get("pinyin", "").replace("|", "\\|")
+            hanzi = s.get("hanzi", "").replace("|", "\\|")
+            md.append(f"| {eng} | {pinyin} | {hanzi} |")
+        md.append("")
+        
+    return "\n".join(md)
+
+def enhance_with_ollama(markdown_content: str, model_name: str = "qwen2.5-coder:latest") -> str:
+    """
+    Tente de faire relire/embellir le Markdown via Ollama Qwen local si disponible.
+    """
+    try:
+        prompt = f"""Tu es un assistant linguistique expert en mandarin.
+Voici le document Markdown extrait d'une fiche de cours PDF :
+
+{markdown_content}
+
+Consignes STRICTES :
+1. Conserve TOUS les mots et phrases du tableau.
+2. Assure-toi que les caractères chinois sont 100% SIMPLIFIÉS (aucun caractère traditionnel).
+3. Ne réponds QU'AVEC le code Markdown formaté, sans aucun commentaire ou texte d'introduction.
+"""
+        res = requests.post("http://localhost:11434/api/generate", json={
+            "model": model_name,
+            "prompt": prompt,
+            "stream": False
+        }, timeout=15)
+        if res.status_code == 200:
+            resp_text = res.json().get("response", "").strip()
+            # Nettoyer les balises de bloc de code ```markdown s'il y en a
+            resp_text = re.sub(r'^```markdown\s*', '', resp_text)
+            resp_text = re.sub(r'^```\s*', '', resp_text)
+            resp_text = re.sub(r'\s*```$', '', resp_text)
+            if resp_text and "| Caractère Simplifié |" in resp_text:
+                return resp_text
+    except Exception as e:
+        print(f"[Ollama Warning] Ollama non disponible ou délai dépassé ({e}), utilisation du Markdown généré.")
+    return markdown_content
+
+def parse_yoyo_pdf(pdf_path: str, output_md_dir: str = "output_markdown", use_ollama: bool = True) -> Dict[str, Any]:
+    """
+    Analyse un fichier PDF Yoyo Chinese, génère des tableaux Markdown avec caractères simplifiés uniques,
+    et enregistre le document Markdown dans le dossier du PDF d'origine ET dans output_markdown/.
     """
     lines = extract_pdf_raw_lines(pdf_path)
     base_name = os.path.splitext(os.path.basename(pdf_path))[0]
+    pdf_dir = os.path.dirname(os.path.abspath(pdf_path))
     
     lesson_title = base_name
     for l in lines:
@@ -110,24 +179,7 @@ def parse_yoyo_pdf(pdf_path: str, output_md_dir: str = "output_markdown") -> Dic
             lesson_title = l
             break
 
-    # Génération du Markdown propre
-    md_lines = [f"# {lesson_title}", ""]
-    for l in lines:
-        if l.lower() in ["vocabulary", "sentences"]:
-            md_lines.append(f"\n## {l.capitalize()}\n")
-        elif l in ["English", "Pinyin", "Chinese Characters"]:
-            continue
-        elif l != lesson_title:
-            md_lines.append(l)
-
-    md_content = "\n".join(md_lines)
-    os.makedirs(output_md_dir, exist_ok=True)
-    md_path = os.path.join(output_md_dir, f"{base_name}.md")
-    with open(md_path, "w", encoding="utf-8") as f:
-        f.write(md_content)
-
     items = []
-    
     vocab_idx = -1
     sentences_idx = -1
     for i, l in enumerate(lines):
@@ -136,13 +188,10 @@ def parse_yoyo_pdf(pdf_path: str, output_md_dir: str = "output_markdown") -> Dic
         elif l.lower() == "sentences":
             sentences_idx = i
 
-    # --- SECTION 1 : Pronoms / Verbes du tableau initial ---
+    # Section 1 : Pronoms / Verbes
     if vocab_idx > 0:
         head_lines = lines[:vocab_idx]
-        eng_list = []
-        pinyin_list = []
-        cjk_list = []
-        
+        eng_list, pinyin_list, cjk_list = [], [], []
         for l in head_lines:
             if l == lesson_title or l in ["English", "Pinyin", "Chinese Characters"]:
                 continue
@@ -165,14 +214,11 @@ def parse_yoyo_pdf(pdf_path: str, output_md_dir: str = "output_markdown") -> Dic
                 "lesson": lesson_title
             })
 
-    # --- SECTION 2 : Vocabulaire ---
+    # Section 2 : Vocabulaire
     if vocab_idx != -1:
         end_v = sentences_idx if sentences_idx != -1 else len(lines)
         v_lines = lines[vocab_idx + 1:end_v]
-        
-        eng_items = []
-        pinyin_items = []
-        cjk_items = []
+        eng_items, pinyin_items, cjk_items = [], [], []
         
         for l in v_lines:
             if is_cjk_string(l):
@@ -207,12 +253,10 @@ def parse_yoyo_pdf(pdf_path: str, output_md_dir: str = "output_markdown") -> Dic
                 "lesson": lesson_title
             })
 
-    # --- SECTION 3 : Sentences ---
+    # Section 3 : Sentences
     if sentences_idx != -1:
         s_lines = lines[sentences_idx + 1:]
-        eng_sents = []
-        pinyin_sents = []
-        cjk_sents = []
+        eng_sents, pinyin_sents, cjk_sents = [], [], []
         
         for l in s_lines:
             if is_cjk_string(l):
@@ -234,9 +278,30 @@ def parse_yoyo_pdf(pdf_path: str, output_md_dir: str = "output_markdown") -> Dic
                 "lesson": lesson_title
             })
 
+    # Générer le document Markdown avec tableaux
+    md_content = generate_clean_markdown(lesson_title, items)
+    if use_ollama:
+        md_content = enhance_with_ollama(md_content)
+
+    # 1. Sauvegarder dans output_markdown/
+    os.makedirs(output_md_dir, exist_ok=True)
+    md_path_output = os.path.join(output_md_dir, f"{base_name}.md")
+    with open(md_path_output, "w", encoding="utf-8") as f:
+        f.write(md_content)
+
+    # 2. Sauvegarder directement à côté du fichier PDF d'origine
+    md_path_pdf_dir = os.path.join(pdf_dir, f"{base_name}.md")
+    try:
+        with open(md_path_pdf_dir, "w", encoding="utf-8") as f:
+            f.write(md_content)
+        print(f"[Yoyo Parser] Markdown sauvegardé à côté du PDF : {md_path_pdf_dir}")
+    except Exception as e_save:
+        print(f"[Yoyo Parser Warning] Écriture dans le dossier PDF d'origine ignorée ({e_save})")
+
     return {
         "lesson_title": lesson_title,
-        "markdown_path": md_path,
+        "markdown_path": md_path_output,
+        "pdf_dir_markdown_path": md_path_pdf_dir,
         "markdown_content": md_content,
         "items": items
     }
