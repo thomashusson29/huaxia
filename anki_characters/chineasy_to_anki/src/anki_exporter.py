@@ -444,8 +444,10 @@ def export_via_ankiconnect(cards: List[Dict[str, Any]], target_deck: str = DECK_
 
         if existing_notes:
             primary_id = existing_notes[0]
-            invoke_ankiconnect("updateNoteFields", note={"id": primary_id, "fields": note_fields, "tags": card_tags})
-            print(f"  [Mise à jour] Note '{hanzi}' (ID: {primary_id}) mise à jour avec audio {audio_sound_tag} & tags {card_tags}.")
+            invoke_ankiconnect("updateNoteFields", note={"id": primary_id, "fields": note_fields})
+            if card_tags:
+                invoke_ankiconnect("addTags", notes=[primary_id], tags=" ".join(card_tags))
+            print(f"  [Mise à jour] Note '{hanzi}' (ID: {primary_id}) mise à jour avec tags {card_tags}.")
             updated_count += 1
             
             if len(existing_notes) > 1:
@@ -470,6 +472,8 @@ def export_via_ankiconnect(cards: List[Dict[str, Any]], target_deck: str = DECK_
             except Exception as err:
                 note_payload["options"]["allowDuplicate"] = True
                 note_id = invoke_ankiconnect("addNote", note=note_payload)
+                if card_tags:
+                    invoke_ankiconnect("addTags", notes=[note_id], tags=" ".join(card_tags))
                 print(f"  [OK Duplicate Allowed] Note '{hanzi}' ajoutée avec tags {card_tags}.")
                 added_count += 1
 
