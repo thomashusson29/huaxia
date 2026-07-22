@@ -7,6 +7,7 @@ et marque les dossiers traités en les renommant avec le suffixe '_PROCESSED'.
 """
 
 import os
+import re
 import glob
 import sys
 from typing import List
@@ -69,7 +70,9 @@ def process_single_folder(folder_path: str, output_media_dir: str = "output_medi
         mnemo_img = card.get("mnemonic_image")
         if mnemo_img and os.path.exists(mnemo_img):
             base_name = os.path.splitext(os.path.basename(mnemo_img))[0]
-            clean_eng = card.get("english", "img").replace(" ", "_")
+            clean_eng = card.get("english", "img")
+            clean_eng = re.sub(r'[^a-zA-Z0-9]', '_', clean_eng)
+            clean_eng = re.sub(r'_+', '_', clean_eng).strip('_')
             out_name = f"mnemo_{clean_eng}_{base_name}.png"
             out_path = os.path.join(output_media_dir, out_name)
             

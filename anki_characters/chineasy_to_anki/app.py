@@ -8,6 +8,7 @@ import os
 import sys
 import glob
 import json
+import re
 import queue
 import threading
 from flask import Flask, render_template, request, Response, send_from_directory, jsonify
@@ -83,7 +84,6 @@ def get_pdf_files():
     files = glob.glob(os.path.join(PDF_INPUT_DIR, "*.pdf"))
     files += glob.glob(os.path.join(PDF_INPUT_DIR, "*.PDF"))
     
-    # Également vérifier les fichiers d'exemple externes si présents
     example_pdf = "/Users/thomashusson/Documents/Projets/Docs_internat/Chinois/yoyo_chinese/Beg-Unit-001-Lesson-01-LN.pdf"
     if os.path.exists(example_pdf) and example_pdf not in files:
         files.append(example_pdf)
@@ -170,11 +170,14 @@ def process_stream():
                     mnemo_img = card.get("mnemonic_image")
                     if mnemo_img and os.path.exists(mnemo_img):
                         base_name = os.path.splitext(os.path.basename(mnemo_img))[0]
-                        clean_eng = card.get("english", "img").replace(" ", "_")
+                        clean_eng = card.get("english", "img")
+                        clean_eng = re.sub(r'[^a-zA-Z0-9]', '_', clean_eng)
+                        clean_eng = re.sub(r'_+', '_', clean_eng).strip('_')
                         out_name = f"mnemo_{clean_eng}_{base_name}.png"
                         out_path = os.path.join(MEDIA_DIR, out_name)
                         try:
-                            processed_path = remove_background(mnemo_img, out_path, color_tolerance=40.0)
+                            is_wotd = card.get("is_word_of_the_day", False)
+                            processed_path = remove_background(mnemo_img, out_path, color_tolerance=40.0, is_word_of_the_day=is_wotd)
                             card["processed_mnemonic_image"] = processed_path
                             print(f"  [OK Image] Détourage généré : {out_name}")
                         except Exception as e:

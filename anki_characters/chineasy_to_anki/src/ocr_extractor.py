@@ -1,8 +1,9 @@
 """
 Module d'extraction du texte et d'analyse des cartes Chineasy via OCR (EasyOCR).
 Accélération matérielle forcée sur Apple Silicon MPS (Metal Performance Shaders).
-Extraction 100% DYNAMIQUE et automatique avec détection automatique 'Word of the Day'
-et auto-correction des coquilles OCR (Pinyin, Hanzi, Anglais).
+Extraction 100% DYNAMIQUE et automatique avec détection automatique 'Word of the Day',
+mise en forme propre des phrases (sans retours à la ligne intempestifs)
+et auto-correction robuste des coquilles OCR.
 """
 
 import os
@@ -111,6 +112,66 @@ def clean_ocr_text_line(text: str) -> str:
         text = re.sub(pattern, repl, text)
     return text
 
+def format_clean_story(story_lines: List[str], hanzi: str = "", english: str = "", pinyin: str = "") -> str:
+    """
+    Formate proprement le texte explicatif de la carte :
+    1. Filtre les lignes répétées qui contiennent seulement le Hanzi, l'Anglais ou le Pinyin.
+    2. Nettoie les scories de casse OCR (ex: SUn -> sun, WaS -> was, eVolved -> evolved).
+    3. Fusionne les lignes qui constituent une même phrase pour éviter les retours à la ligne hachés.
+    """
+    if not story_lines:
+        return ""
+        
+    ignore_keys = {hanzi.lower(), english.lower(), pinyin.lower(), 'moon/month', 'dusk/evening', 'sun', 'tree', 'water', 'sky'}
+    
+    cleaned = []
+    for line in story_lines:
+        l = clean_ocr_text_line(line)
+        if not l:
+            continue
+        if l.lower() in ignore_keys:
+            continue
+        if len(l) <= 2 and not is_cjk_char(l):
+            continue
+            
+        # Corrections de casse et de mots OCR
+        l = re.sub(r'\bSUn\b', 'sun', l)
+        l = re.sub(r'\bWaS\b', 'was', l)
+        l = re.sub(r'\beVolved\b', 'evolved', l)
+        l = re.sub(r'\bIow\b', 'low', l)
+        l = re.sub(r'\bIooks\b', 'looks', l)
+        l = re.sub(r'\bOf\b', 'of', l)
+        l = re.sub(r'\bOr\b', 'or', l)
+        l = re.sub(r'\bWith\b', 'with', l)
+        l = re.sub(r'\bCrescent\b', 'crescent', l)
+        l = re.sub(r'\beheaven\b', 'heaven', l)
+        l = re.sub(r'\bWhat We see\b', 'what we see', l)
+        l = re.sub(r'\'\'', '"', l)
+        l = re.sub(r'\"\"', '"', l)
+        
+        cleaned.append(l)
+
+    if not cleaned:
+        return ""
+
+    paragraphs = []
+    current_p = []
+    for l in cleaned:
+        if current_p:
+            prev = current_p[-1]
+            if prev.endswith(('.', ':', '!', ';', '。')):
+                paragraphs.append(" ".join(current_p))
+                current_p = [l]
+            else:
+                current_p.append(l)
+        else:
+            current_p.append(l)
+            
+    if current_p:
+        paragraphs.append(" ".join(current_p))
+
+    return "<br><br>".join(paragraphs).strip()
+
 def extract_card_info(image_path: str) -> Dict[str, Any]:
     """
     Extrait dynamiquement les informations d'une capture d'écran Chineasy via EasyOCR sur GPU MPS.
@@ -198,15 +259,13 @@ def extract_card_info(image_path: str) -> Dict[str, Any]:
             if not pinyin and raw_hanzi:
                 pinyin = get_pinyin_for_hanzi(raw_hanzi)
 
-            story_lines = []
+            raw_story_lines = []
             for y, t, _ in valid_lines:
-                t_clean = clean_ocr_text_line(t)
                 if y < 1450: continue
-                if any(k in t_clean.lower() for k in ['word of', 'wordoftheday', 'ofthe day']): continue
-                if t_clean == raw_hanzi or (english and english.lower() in t_clean.lower()): continue
-                story_lines.append(t_clean)
+                if any(k in t.lower() for k in ['word of', 'wordoftheday', 'ofthe day']): continue
+                raw_story_lines.append(t)
                 
-            story = "<br>".join(story_lines).strip()
+            formatted_story = format_clean_story(raw_story_lines, raw_hanzi, english, pinyin)
 
             return {
                 "file_path": image_path,
@@ -214,7 +273,7 @@ def extract_card_info(image_path: str) -> Dict[str, Any]:
                 "hanzi": raw_hanzi,
                 "pinyin": pinyin,
                 "english": english if english else "Word of the Day",
-                "story": story,
+                "story": formatted_story,
                 "is_combined": True
             }
 
@@ -252,7 +311,6 @@ def extract_card_info(image_path: str) -> Dict[str, Any]:
         pinyin = ""
         raw_hanzi = ""
 
-        # Détecter le mot-clé d'abord
         for y, t, _ in valid_lines:
             if 1400 <= y <= 1950:
                 t_clean = re.sub(r'[^a-zA-Z\s/]', '', t).strip().lower()
@@ -264,7 +322,6 @@ def extract_card_info(image_path: str) -> Dict[str, Any]:
                         break
                 if english: break
 
-        # Vérification si le Hanzi est mentionné dans la story
         if not raw_hanzi:
             for key, (h_map, p_map, e_map) in CONCEPT_REFERENCE_MAP.items():
                 if h_map in story_text or e_map.lower() in story_text.lower():
@@ -285,7 +342,7 @@ def extract_card_info(image_path: str) -> Dict[str, Any]:
         if not pinyin and raw_hanzi:
             pinyin = get_pinyin_for_hanzi(raw_hanzi)
 
-        formatted_story = "<br>".join([clean_ocr_text_line(t) for t in story_lines]).strip()
+        formatted_story = format_clean_story(story_lines, raw_hanzi, english, pinyin)
 
         return {
             "file_path": image_path,

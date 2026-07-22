@@ -1,6 +1,6 @@
 """
 Module de traitement d'image et de suppression du fond pour les cartes Chineasy.
-Échantillonne la couleur des coins, génère un fond transparent avec anti-aliasing,
+Échantillonne la couleur de fond sous la barre de statut iPhone, génère un fond transparent avec anti-aliasing,
 masque la barre d'état système et les bruits UI, et recadre l'illustration mnémotechnique.
 Prise en charge native des cartes combinées 'Word of the Day'.
 """
@@ -9,28 +9,22 @@ import os
 from PIL import Image, ImageFilter
 import numpy as np
 
-def detect_corner_background_color(image: Image.Image, sample_size: int = 15) -> tuple[int, int, int]:
+def detect_corner_background_color(image: Image.Image) -> tuple[int, int, int]:
     """
-    Échantillonne les 4 coins de l'image pour déterminer la couleur de fond dominante (RGB).
+    Échantillonne la couleur de fond sous la barre de statut iPhone (y_ratio 0.20-0.40)
+    pour déterminer la couleur de fond exacte (RGB) sans subir le noir du notch iPhone.
     """
     img_rgb = image.convert("RGB")
     width, height = img_rgb.size
     
-    corners = [
-        (0, 0, sample_size, sample_size),                                    # Top-Left
-        (width - sample_size, 0, width, sample_size),                        # Top-Right
-        (0, height - sample_size, sample_size, height),                      # Bottom-Left
-        (width - sample_size, height - sample_size, width, height)           # Bottom-Right
-    ]
-    
-    pixels = []
-    for box in corners:
-        crop = img_rgb.crop(box)
-        arr = np.array(crop).reshape(-1, 3)
-        pixels.append(arr)
-        
-    all_pixels = np.vstack(pixels)
-    median_color = np.median(all_pixels, axis=0)
+    samples = []
+    # Échantillonner les bords gauche, centre et droit entre 18% et 40% de la hauteur
+    for x_ratio in [0.10, 0.50, 0.90]:
+        for y_ratio in [0.20, 0.30, 0.40]:
+            px = img_rgb.getpixel((int(width * x_ratio), int(height * y_ratio)))
+            samples.append(px)
+            
+    median_color = np.median(samples, axis=0)
     return tuple(int(c) for c in median_color)
 
 def remove_background(
@@ -49,9 +43,9 @@ def remove_background(
     img = Image.open(image_path).convert("RGBA")
     width, height = img.size
     
-    # Si c'est une carte Word of the Day combinée, isoler la zone d'illustration du haut
+    # Si c'est une carte Word of the Day combinée, isoler la zone d'illustration du haut (15% à 52% de la hauteur)
     if is_word_of_the_day:
-        box = (int(width * 0.05), int(height * 0.07), int(width * 0.95), int(height * 0.52))
+        box = (int(width * 0.05), int(height * 0.12), int(width * 0.95), int(height * 0.52))
         img = img.crop(box)
         width, height = img.size
 
@@ -69,10 +63,10 @@ def remove_background(
     
     if is_word_of_the_day:
         # Masquer la croix X en haut à gauche et les boutons ronds A / HP en bas à droite
-        top_left_mask = int(height * 0.15)
+        top_left_mask = int(height * 0.12)
         alpha[:top_left_mask, :int(width * 0.20)] = 0
-        bottom_right_mask_y = int(height * 0.80)
-        bottom_right_mask_x = int(width * 0.70)
+        bottom_right_mask_y = int(height * 0.78)
+        bottom_right_mask_x = int(width * 0.65)
         alpha[bottom_right_mask_y:, bottom_right_mask_x:] = 0
     else:
         # Masquage standard de la barre d'état et des marges supérieures/inférieures
