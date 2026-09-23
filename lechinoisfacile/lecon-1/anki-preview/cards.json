@@ -1,0 +1,232 @@
+{
+  "_generation": {
+    "created_at": "2026-07-21T11:48:19.967221+00:00",
+    "model": "qwen3-vl:8b",
+    "prompt_version": "1",
+    "source_file": "/Users/thomashusson/Documents/Projets/huaxia/lechinoisfacile/lecon-1/lecon-1.md",
+    "source_url": "https://www.lechinoisfacile.fr/cours/lecons-gratuites/lecon/lecon-1/",
+    "total_duration_ns": 101284252083,
+    "eval_count": 2722
+  },
+  "lesson_title": "Leçon 1 - Les 6 traits de base",
+  "lesson_number": 1,
+  "summary_fr": "Introduction aux six traits de base du chinois et leurs applications dans l'écriture des caractères.",
+  "open_questions": [
+    {
+      "id": "q1",
+      "question": "Quels sont les 6 traits de base de l'écriture chinoise selon la leçon ?",
+      "answer_markdown": "**héng**, **shù**, **diǎn**, **tí**, **piě**, **nà**.",
+      "purpose": "recognition",
+      "front_image": "",
+      "front_audio": "",
+      "back_image": "",
+      "back_audio": "",
+      "evidence": "Les 6 traits de base sont le fondement de l'écriture chinoise. Sans quoi le chinois n'a pas lieu d'exister."
+    },
+    {
+      "id": "q2",
+      "question": "Pourquoi les traits de base sont-ils décrits comme des équivalents des lettres de l'alphabet occidental ?",
+      "answer_markdown": "Parce qu'ils constituent les éléments fondamentaux pour composer les caractères, tout comme les lettres composent les mots en occident.",
+      "purpose": "recognition",
+      "front_image": "",
+      "front_audio": "",
+      "back_image": "",
+      "back_audio": "",
+      "evidence": "Les traits sont des tracés que tracent les Chinois dans un sens prédéfini. Du point de vue de leur fonction les traits sont les équivalents des lettres de l'alphabet dans les langues occidentales."
+    },
+    {
+      "id": "q3",
+      "question": "Quel est le sens du trait **héng** et comment doit-il être tracé ?",
+      "answer_markdown": "C'est un tracé horizontal, on le trace de gauche à droite.",
+      "purpose": "recognition",
+      "front_image": "",
+      "front_audio": "audio/ordre_1_Lecon1_1_heng2.mp3",
+      "back_image": "",
+      "back_audio": "",
+      "evidence": "**héng** : il s’agit d’un tracé horizontal, on le trace de gauche à droite."
+    },
+    {
+      "id": "q4",
+      "question": "Quel est le sens du trait **shù** et comment doit-il être tracé ?",
+      "answer_markdown": "C'est un tracé vertical, on le trace de haut en bas.",
+      "purpose": "recognition",
+      "front_image": "",
+      "front_audio": "audio/ordre_2_Lecon1_2_shu4.mp3",
+      "back_image": "",
+      "back_audio": "",
+      "evidence": "**shù** : il s’agit d’un tracé vertical, on le trace de haut en bas."
+    },
+    {
+      "id": "q5",
+      "question": "Quel est le sens du trait **diǎn** et comment doit-il être tracé ?",
+      "answer_markdown": "C'est un petit bout. On le trace de haut en bas comme l'accent grave en français.",
+      "purpose": "recognition",
+      "front_image": "",
+      "front_audio": "audio/ordre_4_Lecon1_4_dian3.mp3",
+      "back_image": "",
+      "back_audio": "",
+      "evidence": "**diǎn** : c’est un petit bout. On le trace de haut en bas comme l’accent grave en français."
+    },
+    {
+      "id": "q6",
+      "question": "Quel est le sens du trait **tí** et comment doit-il être tracé ?",
+      "answer_markdown": "C'est un petit tracé vers le haut, mais plus long que **diǎn 丶**.",
+      "purpose": "recognition",
+      "front_image": "",
+      "front_audio": "audio/ordre_5_Lecon1_5_ti2.mp3",
+      "back_image": "",
+      "back_audio": "",
+      "evidence": "**tí** : il s’agit d’un petit tracé vers le haut, mais plus long que **diǎn 丶**."
+    },
+    {
+      "id": "q7",
+      "question": "Quel est le sens du trait **piě** et comment doit-il être tracé ?",
+      "answer_markdown": "C'est une petite courbe inclinée vers la gauche.",
+      "purpose": "recognition",
+      "front_image": "",
+      "front_audio": "audio/ordre_6_Lecon1_6_pie3.mp3",
+      "back_image": "",
+      "back_audio": "",
+      "evidence": "**piě** : il s’agit d’une petite courbe inclinée vers la gauche."
+    },
+    {
+      "id": "q8",
+      "question": "Quel est le sens du trait **nà** et comment doit-il être tracé ?",
+      "answer_markdown": "C'est une petite courbe inclinée vers la droite.",
+      "purpose": "recognition",
+      "front_image": "",
+      "front_audio": "audio/ordre_7_Lecon1_7_na4-1.mp3",
+      "back_image": "",
+      "back_audio": "",
+      "evidence": "**nà** : il s’agit d’une petite courbe inclinée vers la droite."
+    },
+    {
+      "id": "q9",
+      "question": "Quels sont les deux caractères appris avec les 6 traits de base et leurs significations ?",
+      "answer_markdown": "**十 (shí)** = « dix », **人 (rén)** = « homme ».",
+      "purpose": "recognition",
+      "front_image": "",
+      "front_audio": "",
+      "back_image": "",
+      "back_audio": "",
+      "evidence": "Avec ces 2 premiers traits on peut déjà écrire notre 1er caractère : 十 shí = « dix ». Avec ces 2 derniers traits, on peut déjà écrire notre 2ème caractère 人 rén = « homme »."
+    },
+    {
+      "id": "q10",
+      "question": "Pourquoi est-il important de respecter l'ordre et le sens des traits dans les caractères chinois ?",
+      "answer_markdown": "Parce que cela constitue une règle d'orthographe, si on ne le respecte pas, les Chinois considéreront que vous avez brûlé un feu rouge.",
+      "purpose": "recognition",
+      "front_image": "",
+      "front_audio": "",
+      "back_image": "",
+      "back_audio": "",
+      "evidence": "C’est très important ! Le sens et l’ordre des traits sont des *règles d’orthographe*. Si vous ne les respectez pas, les Chinois considéreront que vous avez brûlé un feu rouge !!!!"
+    },
+    {
+      "id": "q11",
+      "question": "Quel est le caractère chinois pour 'homme' et comment est-il composé ?",
+      "answer_markdown": "**人 (rén)** : composé de **nà** et **shù**, représentant un homme stylisé debout sur ses deux jambes.",
+      "purpose": "recognition",
+      "front_image": "",
+      "front_audio": "",
+      "back_image": "",
+      "back_audio": "",
+      "evidence": "Il représente un homme stylisé, debout sur ses deux jambes. Avec ces 2 derniers traits, on peut déjà écrire notre 2ème caractère 人 rén = « homme »."
+    },
+    {
+      "id": "q12",
+      "question": "Quel est le caractère chinois pour 'dix' et comment est-il composé ?",
+      "answer_markdown": "**十 (shí)** : composé de **héng** et **shù**, représentant deux traits perpendiculaires.",
+      "purpose": "recognition",
+      "front_image": "",
+      "front_audio": "",
+      "back_image": "",
+      "back_audio": "",
+      "evidence": "Avec ces 2 premiers traits on peut déjà écrire notre 1er caractère : 十 shí = « dix »."
+    },
+    {
+      "id": "q13",
+      "question": "Quel est le lien entre les traits de base et la langue chinoise ?",
+      "answer_markdown": "Les traits sont des tracés que tracent les Chinois dans un sens prédéfini, ils constituent le fondement de l'écriture chinoise.",
+      "purpose": "recognition",
+      "front_image": "",
+      "front_audio": "",
+      "back_image": "",
+      "back_audio": "",
+      "evidence": "Les traits sont des tracés que tracent les Chinois dans un sens prédéfini. Du point de vue de leur fonction les traits sont les équivalents des lettres de l'alphabet dans les langues occidentales."
+    },
+    {
+      "id": "q14",
+      "question": "Pourquoi est-il important de connaître les 6 traits de base pour apprendre le chinois ?",
+      "answer_markdown": "Parce qu'ils sont le fondement de l'écriture chinoise, sans quoi le chinois n'a pas lieu d'exister.",
+      "purpose": "recognition",
+      "front_image": "",
+      "front_audio": "",
+      "back_image": "",
+      "back_audio": "",
+      "evidence": "Les 6 traits de base sont le fondement de l'écritue chinoise. Sans quoi le chinois n'a pas lieu d'exister."
+    }
+  ],
+  "cloze_notes": [
+    {
+      "id": "c1",
+      "content": "Les six traits de base du chinois sont : {{c1::héng, shù, diǎn, tí, piě, là::}}.",
+      "image": "",
+      "audio": "",
+      "evidence": "Les 6 traits de base sont le fondement de l'écriture chinoise. Sans quoi le chinois n'a pas lieu d'exister."
+    },
+    {
+      "id": "c2",
+      "content": "Le trait **héng** est un tracé {{c1::horizontal, de gauche à droite::}}.",
+      "image": "",
+      "audio": "",
+      "evidence": "**héng** : il s’agit d’un tracé horizontal, on le trace de gauche à droite."
+    },
+    {
+      "id": "c3",
+      "content": "Le trait **shù** est un tracé {{c1::vertical, de haut en bas::}}.",
+      "image": "",
+      "audio": "",
+      "evidence": "**shù** : il s’agit d’un tracé vertical, on le trace de haut en bas."
+    },
+    {
+      "id": "c4",
+      "content": "Le trait **diǎn** est un petit bout tracé {{c1::de haut en bas comme l'accent grave en français::}}.",
+      "image": "",
+      "audio": "",
+      "evidence": "**diǎn** : c’est un petit bout. On le trace de haut en bas comme l’accent grave en français."
+    },
+    {
+      "id": "c5",
+      "content": "Le trait **tí** est un petit tracé {{c1::vers le haut, plus long que diǎn 丶::}}.",
+      "image": "",
+      "audio": "",
+      "evidence": "**tí** : il s’agit d’un petit tracé vers le haut, mais plus long que **diǎn 丶**."
+    },
+    {
+      "id": "c6",
+      "content": "Le trait **piě** est une petite courbe {{c1::inclinée vers la gauche::}}.",
+      "image": "",
+      "audio": "",
+      "evidence": "**piě** : il s’agit d’une petite courbe inclinée vers la gauche."
+    },
+    {
+      "id": "c7",
+      "content": "Le trait **nà** est une petite courbe {{c1::inclinée vers la droite::}}.",
+      "image": "",
+      "audio": "",
+      "evidence": "**nà** : il s’agit d’une petite courbe inclinée vers la droite."
+    },
+    {
+      "id": "c8",
+      "content": "Le caractère **十 (shí)** signifie {{c1::« dix »::}}.",
+      "image": "",
+      "audio": "",
+      "evidence": "Avec ces 2 premiers traits on peut déjà écrire notre 1er caractère : 十 shí = « dix »."
+    }
+  ],
+  "warnings": [
+    "Les questions ouvertes ne doivent pas contenir de répétitions inutiles. Les clozes sont numérotées à partir de c1 dans chaque note.",
+    "Vérifiez que les indices des clozes correspondent aux réponses exactes."
+  ]
+}

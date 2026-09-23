@@ -10,7 +10,9 @@ import glob
 import json
 import re
 import queue
+import secrets
 import threading
+from dataclasses import asdict
 from flask import Flask, render_template, request, Response, send_from_directory, jsonify
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -18,10 +20,22 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from src.ocr_extractor import extract_card_info
 from src.image_processor import remove_background
 from src.card_matcher import match_cards
-from src.audio_generator import generate_audio_sync
+from src.audio_generator import generate_audio_sync_with_source
 from src.anki_exporter import export_to_anki, export_yoyo_to_anki
 from src.anki_to_obsidian import export_anki_notes_to_obsidian
+from src.character_tagger import resolve_contextual_pinyin
 from src.yoyo_parser import parse_yoyo_pdf
+from huaxia_tags import AUDIO_SOURCE_TAG_PREFIX, audio_source_tag
+from update_anki_tags import (
+    CONFIRM_ADD,
+    CONFIRM_CLEANUP,
+    DEFAULT_BACKUP_DIR,
+    RECENT_QUERY,
+    apply_report,
+    backup_chinese_deck,
+    get_active_ankiconnect_url as get_migration_ankiconnect_url,
+    prepare_live_report,
+)
 
 app = Flask(__name__, template_folder="templates")
 
@@ -33,6 +47,43 @@ AUDIO_DIR = os.path.join(BASE_DIR, "output_audio")
 MARKDOWN_DIR = os.path.join(BASE_DIR, "output_markdown")
 
 PROCESSED_TAG = "_PROCESSED"
+recent_tag_previews = {}
+recent_tag_previews_lock = threading.Lock()
+
+
+def validate_yoyo_items(items):
+    """Empêche l’export de colonnes PDF décalées vers Anki."""
+    errors = []
+    forbidden_values = {"english", "pinyin", "chinese", "chinese characters"}
+    for index, item in enumerate(items, 1):
+        hanzi = str(item.get("hanzi") or "").strip()
+        pinyin = str(item.get("pinyin") or "").strip()
+        english = str(item.get("english") or "").strip()
+        _, plausible = resolve_contextual_pinyin(hanzi, pinyin)
+        if (
+            not hanzi
+            or not pinyin
+            or not english
+            or english.lower() in forbidden_values
+            or not plausible
+        ):
+            errors.append(
+                f"élément {index}: Hanzi={hanzi!r}, "
+                f"Pinyin={pinyin!r}, Anglais={english!r}"
+            )
+    return errors
+
+
+def attach_audio_source_tag(item, provider):
+    """Enregistre une seule provenance audio canonique sur l’élément exporté."""
+    tags = [
+        str(tag)
+        for tag in (item.get("tags") or [])
+        if not str(tag).startswith(AUDIO_SOURCE_TAG_PREFIX)
+    ]
+    if provider:
+        tags.append(audio_source_tag(provider))
+    item["tags"] = list(dict.fromkeys(tags))
 
 class StreamLogger:
     """Capteur personnalisé pour rediriger le stdout vers la file SSE."""
@@ -192,9 +243,13 @@ def process_stream():
                         audio_filename = f"audio_zh_{hanzi}.mp3"
                         audio_out_path = os.path.join(AUDIO_DIR, audio_filename)
                         try:
-                            res_audio = generate_audio_sync(hanzi, audio_out_path)
+                            res_audio, audio_source = generate_audio_sync_with_source(
+                                hanzi,
+                                audio_out_path,
+                            )
                             if res_audio:
                                 card["audio_path"] = res_audio
+                                attach_audio_source_tag(card, audio_source)
                                 print(f"  [OK Audio] Fichier audio généré pour '{hanzi}' : {audio_filename}")
                         except Exception as e:
                             print(f"  [Erreur Audio] {e}")
@@ -278,6 +333,16 @@ def process_pdf_stream():
                 parsed_data = parse_yoyo_pdf(full_pdf_path, MARKDOWN_DIR)
                 items = parsed_data.get("items", [])
                 print(f"  -> {len(items)} élément(s) extrait(s) (Mots & Phrases). Markdown généré dans output_markdown/")
+                validation_errors = validate_yoyo_items(items)
+                if validation_errors:
+                    for validation_error in validation_errors[:10]:
+                        print(f"  [Validation refusée] {validation_error}")
+                    raise ValueError(
+                        "Import Yoyo interrompu : "
+                        f"{len(validation_errors)} ligne(s) PDF ont des colonnes "
+                        "Hanzi/pinyin/anglais incohérentes."
+                    )
+                print("  [Validation] Colonnes Hanzi/pinyin/anglais cohérentes.")
 
                 # 2. Génération Audio HD Mandarin
                 print("[2/4] Génération automatique des fichiers audio mandarin HD...")
@@ -288,9 +353,13 @@ def process_pdf_stream():
                         audio_filename = f"audio_zh_{hanzi}.mp3"
                         audio_out_path = os.path.join(AUDIO_DIR, audio_filename)
                         try:
-                            res_audio = generate_audio_sync(hanzi, audio_out_path)
+                            res_audio, audio_source = generate_audio_sync_with_source(
+                                hanzi,
+                                audio_out_path,
+                            )
                             if res_audio:
                                 item["audio_path"] = res_audio
+                                attach_audio_source_tag(item, audio_source)
                                 print(f"  ({idx}/{len(items)}) [OK Audio] '{hanzi}' : {audio_filename}")
                         except Exception as e:
                             print(f"  ({idx}/{len(items)}) [Erreur Audio] '{hanzi}': {e}")
@@ -344,6 +413,87 @@ def export_obsidian():
         return jsonify(res)
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/tags/recent", methods=["POST"])
+def migrate_recent_tags():
+    """Prévisualise ou applique les tags des cartes chinoises ajoutées aujourd'hui."""
+    req_data = request.get_json(silent=True) or {}
+    cleanup_legacy = req_data.get("cleanup_legacy") is True
+    should_apply = req_data.get("apply") is True
+    expected_confirmation = CONFIRM_CLEANUP if cleanup_legacy else CONFIRM_ADD
+    if should_apply and req_data.get("confirm") != expected_confirmation:
+        return jsonify({
+            "success": False,
+            "error": (
+                "Confirmation refusée : lancez d’abord l’aperçu correspondant "
+                "dans l’application."
+            ),
+        }), 400
+
+    url = get_migration_ankiconnect_url()
+    if not url:
+        return jsonify({
+            "success": False,
+            "error": "AnkiConnect est inaccessible sur les ports 8766 et 8765.",
+        }), 503
+
+    try:
+        report = prepare_live_report(
+            url,
+            query=RECENT_QUERY,
+            cleanup_legacy=cleanup_legacy,
+        )
+        report_payload = asdict(report)
+        comparable_report = dict(report_payload)
+        comparable_report.pop("generated_at", None)
+        report_signature = json.dumps(
+            comparable_report,
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+        preview_token = ""
+        if should_apply:
+            supplied_token = str(req_data.get("preview_token") or "")
+            with recent_tag_previews_lock:
+                expected_preview = recent_tag_previews.get(cleanup_legacy)
+            if (
+                not expected_preview
+                or supplied_token != expected_preview["token"]
+                or report_signature != expected_preview["signature"]
+            ):
+                return jsonify({
+                    "success": False,
+                    "error": (
+                        "L’aperçu n’existe plus ou la collection a changé. "
+                        "Relancez l’aperçu avant d’appliquer."
+                    ),
+                }), 409
+        else:
+            preview_token = secrets.token_urlsafe(24)
+            with recent_tag_previews_lock:
+                recent_tag_previews[cleanup_legacy] = {
+                    "token": preview_token,
+                    "signature": report_signature,
+                }
+
+        backup_path = ""
+        if should_apply and report.notes_changed:
+            backup_path = str(backup_chinese_deck(url, DEFAULT_BACKUP_DIR))
+            apply_report(url, report, batch_size=500)
+        if should_apply:
+            with recent_tag_previews_lock:
+                recent_tag_previews.pop(cleanup_legacy, None)
+        return jsonify({
+            "success": True,
+            "applied": should_apply,
+            "backup_path": backup_path,
+            "preview_token": preview_token,
+            "report": report_payload,
+        })
+    except Exception as error:
+        return jsonify({"success": False, "error": str(error)}), 500
+
 
 if __name__ == "__main__":
     port = 5001

@@ -1,0 +1,3 @@
+genanki
+edge-tts
+gTTS

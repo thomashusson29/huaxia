@@ -1,0 +1,173 @@
+{
+  "lesson_title": "Leçon 1",
+  "lesson_number": 1,
+  "summary_fr": "Cette leçon introduit les 6 traits de base de l'écriture chinoise : héng, shù, diǎn, tí, piě et nà. Elle explique comment ces traits sont utilisés pour former des caractères simples comme 十 (dix) et 人 (homme).",
+  "open_questions": [
+    {
+      "id": "q1",
+      "question": "Quel est le premier trait de base que nous avons étudié ?",
+      "answer_markdown": "**héng** : il s’agit d’un tracé **horizontal**, on le trace **de gauche à droite**.",
+      "purpose": "recognition",
+      "front_image": "",
+      "front_audio": "audio/ordre_1_Lecon1_1_heng2.mp3",
+      "back_image": "",
+      "back_audio": "",
+      "evidence": "Il s’agit d’un tracé **horizontal**, on le trace **de gauche à droite**."
+    },
+    {
+      "id": "q2",
+      "question": "Quel est le deuxième trait de base que nous avons étudié ?",
+      "answer_markdown": "**shù** : il s’agit d’un tracé vertical, on le trace de haut en bas.",
+      "purpose": "recognition",
+      "front_image": "",
+      "front_audio": "audio/ordre_2_Lecon1_2_shu4.mp3",
+      "back_image": "",
+      "back_audio": "",
+      "evidence": "Il s’agit d’un tracé vertical, on le trace de haut en bas."
+    },
+    {
+      "id": "q3",
+      "question": "Quel est le troisième trait de base que nous avons étudié ?",
+      "answer_markdown": "**diǎn** : c’est un petit bout. On le trace **de haut en bas** comme l’accent grave en français.",
+      "purpose": "recognition",
+      "front_image": "",
+      "front_audio": "audio/ordre_4_Lecon1_4_dian3.mp3",
+      "back_image": "",
+      "back_audio": "",
+      "evidence": "c’est un petit bout. On le trace **de haut en bas** comme l’accent grave en français."
+    },
+    {
+      "id": "q4",
+      "question": "Quel est le quatrième trait de base que nous avons étudié ?",
+      "answer_markdown": "**tí** : il s’agit d’un petit tracé **vers le haut**, mais plus long que **diǎn 丶**.",
+      "purpose": "recognition",
+      "front_image": "",
+      "front_audio": "audio/ordre_5_Lecon1_5_ti2.mp3",
+      "back_image": "",
+      "back_audio": "",
+      "evidence": "il s’agit d’un petit tracé **vers le haut**, mais plus long que **diǎn 丶**."
+    },
+    {
+      "id": "q5",
+      "question": "Quel est le cinquième trait de base que nous avons étudié ?",
+      "answer_markdown": "**piě** : il s’agit d’une petite courbe **inclinée vers la gauche**.",
+      "purpose": "recognition",
+      "front_image": "",
+      "front_audio": "audio/ordre_6_Lecon1_6_pie3.mp3",
+      "back_image": "",
+      "back_audio": "",
+      "evidence": "il s’agit d’une petite courbe **inclinée vers la gauche**."
+    },
+    {
+      "id": "q6",
+      "question": "Quel est le sixième trait de base que nous avons étudié ?",
+      "answer_markdown": "**nà** : il s’agit d’une petite courbe **inclinée vers la droite**.",
+      "purpose": "recognition",
+      "front_image": "",
+      "front_audio": "audio/ordre_7_Lecon1_7_na4-1.mp3",
+      "back_image": "",
+      "back_audio": "",
+      "evidence": "il s’agit d’une petite courbe **inclinée vers la droite**."
+    },
+    {
+      "id": "q7",
+      "question": "Quel est le caractère chinois que nous avons appris avec le trait héng ?",
+      "answer_markdown": "十 shí = « **dix** ».",
+      "purpose": "recognition",
+      "front_image": "",
+      "front_audio": "audio/Lecon1_3_shi2.mp3",
+      "back_image": "",
+      "back_audio": "",
+      "evidence": "Avec ces 2 premiers traits on peut déjà écrire notre 1er caractère : 十 shí = « **dix** »."
+    },
+    {
+      "id": "q8",
+      "question": "Quel est le caractère chinois que nous avons appris avec le trait shù ?",
+      "answer_markdown": "人 rén = « **homme** ».",
+      "purpose": "recognition",
+      "front_image": "",
+      "front_audio": "audio/Lecon1_8_ren2.mp3",
+      "back_image": "",
+      "back_audio": "",
+      "evidence": "Avec ces 2 premiers traits on peut déjà écrire notre 1er caractère : 十 shí = « **dix** »."
+    },
+    {
+      "id": "q9",
+      "question": "Quelle est la traduction en français de 'héng' ?",
+      "answer_markdown": "horizontal",
+      "purpose": "production",
+      "front_image": "",
+      "front_audio": "",
+      "back_image": "",
+      "back_audio": "",
+      "evidence": "**héng** : il s’agit d’un tracé **horizontal**, on le trace **de gauche à droite**."
+    },
+    {
+      "id": "q10",
+      "question": "Quelle est la traduction en français de 'shù' ?",
+      "answer_markdown": "vertical",
+      "purpose": "production",
+      "front_image": "",
+      "front_audio": "",
+      "back_image": "",
+      "back_audio": "",
+      "evidence": "**shù** : il s’agit d’un tracé vertical, on le trace de haut en bas."
+    }
+  ],
+  "cloze_notes": [
+    {
+      "id": "n1",
+      "content": "Le trait héng est **horizontal**, on le trace **de gauche à droite**.",
+      "image": "",
+      "audio": "",
+      "evidence": "**héng** : il s’agit d’un tracé **horizontal**, on le trace **de gauche à droite**."
+    },
+    {
+      "id": "n2",
+      "content": "Le trait shù est **vertical**, on le trace de haut en bas.",
+      "image": "",
+      "audio": "",
+      "evidence": "**shù** : il s’agit d’un tracé vertical, on le trace de haut en bas."
+    },
+    {
+      "id": "n3",
+      "content": "Le trait diǎn est un petit bout. On le trace **de haut en bas** comme l’accent grave en français.",
+      "image": "",
+      "audio": "",
+      "evidence": "**diǎn** : c’est un petit bout. On le trace **de haut en bas** comme l’accent grave en français."
+    },
+    {
+      "id": "n4",
+      "content": "Le trait tí est un petit tracé **vers le haut**, mais plus long que **diǎn 丶**.",
+      "image": "",
+      "audio": "",
+      "evidence": "**tí** : il s’agit d’un petit tracé **vers le haut**, mais plus long que **diǎn 丶**."
+    },
+    {
+      "id": "n5",
+      "content": "Le trait piě est une petite courbe **inclinée vers la gauche**.",
+      "image": "",
+      "audio": "",
+      "evidence": "**piě** : il s’agit d’une petite courbe **inclinée vers la gauche**."
+    },
+    {
+      "id": "n6",
+      "content": "Le trait nà est une petite courbe **inclinée vers la droite**.",
+      "image": "",
+      "audio": "",
+      "evidence": "**nà** : il s’agit d’une petite courbe **inclinée vers la droite**."
+    },
+    {
+      "id": "n7",
+      "content": "Le caractère 十 est composé de 4 traits : un trait vertical du milieu et deux branches sur les côtés.",
+      "image": "images/ordre_6_Lecon1_5_decomposition-p70y4dhoo3lw5sv2lczpo6dzwu3sdpqjy6o9nmfcnk.jpg",
+      "audio": "",
+      "evidence": "Avec ces 2 premiers traits on peut déjà écrire notre 1er caractère : 十 shí = « **dix** »."
+    }
+  ],
+  "warnings": [
+    "Ne pas placer de syntaxe cloze dans une question ouverte.",
+    "Produire exactement 10 questions ouvertes et 7 notes Enhanced Cloze.",
+    "Utiliser uniquement les chemins de médias fournis, ou une chaîne vide."
+  ]
+}

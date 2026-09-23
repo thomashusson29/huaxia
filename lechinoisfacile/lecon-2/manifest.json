@@ -1,0 +1,91 @@
+{
+  "source_page": "https://www.lechinoisfacile.fr/cours/lecons-gratuites/lecon/lecon-2/",
+  "title": "Leçon 2 - Le Chinois Facile",
+  "downloaded_at": "2026-07-21T12:03:12.707970+00:00",
+  "assets": [
+    {
+      "kind": "image",
+      "file": "images/ordre_1_Lecon2_1_trait_de_base-p8o26idi693whod77ihievk1uwhx7gnyv5fzdbtbos.jpg",
+      "source": "https://www.lechinoisfacile.fr/wp-content/uploads/elementor/thumbs/ordre_1_Lecon2_1_trait_de_base-p8o26idi693whod77ihievk1uwhx7gnyv5fzdbtbos.jpg",
+      "content_type": "image/jpeg",
+      "bytes": 18027,
+      "sha256": "bcefdafe27e61a65233886b1e2a160b59b1e33656d5241b12da0c934c345ef52"
+    },
+    {
+      "kind": "image",
+      "file": "images/ordre_2_Lecon2_2_variante-p8o27z0gsz3yju8qo58mai9v4hah6igxqdz68tnae8.jpg",
+      "source": "https://www.lechinoisfacile.fr/wp-content/uploads/elementor/thumbs/ordre_2_Lecon2_2_variante-p8o27z0gsz3yju8qo58mai9v4hah6igxqdz68tnae8.jpg",
+      "content_type": "image/jpeg",
+      "bytes": 30852,
+      "sha256": "b6ea10f83e211a1753f8d945a2df4e0b86738a2ea30b42ddab6659ba760e3710"
+    },
+    {
+      "kind": "image",
+      "file": "images/ordre_3_Lecon2_3_-decomposition-p8o29691jcr5dwhxnnxgh7d2g7dd0l8l8bzibjv62y.jpg",
+      "source": "https://www.lechinoisfacile.fr/wp-content/uploads/elementor/thumbs/ordre_3_Lecon2_3_-decomposition-p8o29691jcr5dwhxnnxgh7d2g7dd0l8l8bzibjv62y.jpg",
+      "content_type": "image/jpeg",
+      "bytes": 17721,
+      "sha256": "73e63be3db685a82e0456ab5611e64a4932c3775424244dfc75e917a865f0ce6"
+    },
+    {
+      "kind": "image",
+      "file": "images/ordre_4_Lecon2_4_-decomposition-p8o2bxvxnsjjkkh7huzwti7xf1q9oi84y14z6vrfre.jpg",
+      "source": "https://www.lechinoisfacile.fr/wp-content/uploads/elementor/thumbs/ordre_4_Lecon2_4_-decomposition-p8o2bxvxnsjjkkh7huzwti7xf1q9oi84y14z6vrfre.jpg",
+      "content_type": "image/jpeg",
+      "bytes": 16301,
+      "sha256": "e9959f38839d5e20d4edff0767d678605b710efacfcfcd9c428e5f535101fac3"
+    },
+    {
+      "kind": "image",
+      "file": "images/ordre_5_Lecon2_5_-decomposition.jpg",
+      "source": "https://www.lechinoisfacile.fr/wp-content/uploads/2021/07/ordre_5_Lecon2_5_-decomposition.jpg",
+      "content_type": "image/jpeg",
+      "bytes": 27797,
+      "sha256": "33d6a91c38e61083460a8d2fe5796c111ef4fc9162f453a28d5d7427fc31cb51"
+    },
+    {
+      "kind": "image",
+      "file": "images/dragon.png",
+      "source": "https://www.lechinoisfacile.fr/wp-content/uploads/2021/05/dragon.png",
+      "content_type": "image/png",
+      "bytes": 27549,
+      "sha256": "de84c8106cdd76273e80dcbfdacca017d5b3df63a30da71632c37ca2b21a934f"
+    },
+    {
+      "kind": "audio",
+      "file": "audio/ordre_0_2_numlecon_new.mp3",
+      "source": "https://www.lechinoisfacile.fr/wp-content/uploads/2021/06/ordre_0_2_numlecon_new.mp3",
+      "content_type": "audio/mpeg",
+      "bytes": 89860,
+      "sha256": "476d5481320a33a7fd40b403a71a94de31eaf52db2bf882a39a4baaba8c16214"
+    },
+    {
+      "kind": "audio",
+      "file": "audio/ordre_1_Lecon2_1_ma3.mp3",
+      "source": "https://www.lechinoisfacile.fr/wp-content/uploads/2021/06/ordre_1_Lecon2_1_ma3.mp3",
+      "content_type": "audio/mpeg",
+      "bytes": 62883,
+      "sha256": "282f9b8bdd54b0bfb032f9ee6302470af1b3dfe3f8bb6637a08bce9dbc9c3881"
+    },
+    {
+      "kind": "audio",
+      "file": "audio/ordre_2_Lecon2_2_kou3.mp3",
+      "source": "https://www.lechinoisfacile.fr/wp-content/uploads/2021/06/ordre_2_Lecon2_2_kou3.mp3",
+      "content_type": "audio/mpeg",
+      "bytes": 71661,
+      "sha256": "d1677fea7288ea0d92a92b26516ee10bd26a0f1074706ba6d0302b78095f9bd6"
+    },
+    {
+      "kind": "audio",
+      "file": "audio/ordre_3_Lecon2_3_er3.mp3",
+      "source": "https://www.lechinoisfacile.fr/wp-content/uploads/2021/06/ordre_3_Lecon2_3_er3.mp3",
+      "content_type": "audio/mpeg",
+      "bytes": 49318,
+      "sha256": "0cad29e91a4e3b61292fd72213502fc8865fa50fc19ff8ed41a4a112288fcb32"
+    }
+  ],
+  "summary": {
+    "images": 6,
+    "audio": 4
+  }
+}

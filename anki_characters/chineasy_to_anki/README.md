@@ -35,8 +35,10 @@ L'objectif de cet outil est d'automatiser à 100% la création de cartes de rév
   - **Carte 2 (Écoute & Écriture)** : Lecture audio seule au recto + zone de saisie (Pinyin ou Hanzi) + tableau blanc HTML5 (Canvas) pour dessiner les traits ➔ Correction automatique au verso.
 - **Rendu Adaptatif Light & Dark Mode** : Support natif du mode nuit (`#2c2c2c`) sur Anki Desktop et AnkiMobile.
 - **Système de Tagging Automatique Hiérarchisé** :
-  - Chineasy : `chinois`, `chineasy`
-  - Yoyo Chinese : `chinois`, `yoyochinese`, `unit1`, `lesson1`, `vocabulary`, `sentence`
+  - Hanzi : `chinois::caracteres::hanzi::<caractère>`
+  - Pinyin : `chinois::caracteres::pinyin::<syllabe>`
+  - Chineasy : `chinois::source::chineasy`
+  - Yoyo complet : `chinois::source::yoyochinese::cours::<cours>::niveau::<xx>::unite::<xxx>::lecon::<xx>`
 
 ---
 
@@ -52,7 +54,7 @@ L'objectif de cet outil est d'automatiser à 100% la création de cartes de rév
 
 ```bash
 # 1. Accéder au dossier du projet
-cd anki_characters/chineasy_to_anki
+cd Documents/Projets/huaxia/anki_characters/chineasy_to_anki
 
 # 2. Créer et activer l'environnement virtuel Python
 python3 -m venv .venv
@@ -69,6 +71,8 @@ pip install -r requirements.txt
 ### Mode Interface Web (GUI)
 
 ```bash
+cd Documents/Projets/huaxia/anki_characters/chineasy_to_anki
+source .venv/bin/activate
 python app.py
 ```
 
@@ -76,6 +80,16 @@ Ouvrez votre navigateur à l'adresse : `http://127.0.0.1:5001`
 
 - **Onglet Chineasy (Captures)** : Sélectionnez un sous-dossier de `captures/` et lancez le traitement automatique.
 - **Onglet Yoyo Chinese (PDF)** : Glissez-déposez un fichier PDF de cours Yoyo Chinese dans la zone de dépôt (ou sélectionnez-en un dans la liste) pour générer le Markdown et importer les cartes dans Anki.
+- **Tags des cartes ajoutées aujourd’hui** : le panneau utilise exclusivement
+  `deck:"chinois" added:1`. Lancez d’abord l’aperçu ; l’application n’active
+  l’écriture qu’après cet aperçu. Une modification de la collection invalide
+  automatiquement la confirmation.
+- Les audios créés par l’application reçoivent leur provenance canonique :
+  `chinois::audio::source::youdao`, `baidu`, `edge_tts` ou `gtts`.
+
+L’import PDF vérifie désormais l’alignement Hanzi/pinyin/anglais avant tout
+export. Une ligne décalée interrompt l’import au lieu de créer une note
+incorrecte.
 
 ### Mode Ligne de Commande (CLI)
 
@@ -118,9 +132,56 @@ Ouvrez votre navigateur à l'adresse : `http://127.0.0.1:5001`
 1. **Captures Chineasy** :
    - Déposer les captures dans `captures/20_07_2026/`.
    - Exécuter `python main.py captures/20_07_2026` ou utiliser l'interface Web.
-   - Les cartes sont créées dans le deck `chinois::chineasy_characters` avec les tags `chinois` et `chineasy`.
+   - Les cartes sont créées dans le deck `chinois::chineasy_characters` avec les tags hiérarchiques de caractères, de pinyin et `chinois::source::chineasy`.
 
 2. **Cours PDF Yoyo Chinese** :
    - Glisser-déposer le fichier PDF dans l'interface Web (ex: `Beg-Unit-001-Lesson-01-LN.pdf`).
    - Le fichier Markdown structuré avec tableaux est enregistré à côté du PDF.
-   - Les cartes (vocabulaire et phrases) sont créées dans le deck `chinois::yoyo_chinese` avec les tags `chinois`, `yoyochinese`, `unit1`, `lesson1`, `vocabulary` / `sentence`.
+   - Les cartes (vocabulaire et phrases) sont créées dans le deck `chinois::yoyo_chinese`. Cet ancien importeur PDF ajoute `chinois::source::yoyochinese` et conserve `vocabulary` / `sentence`, mais ne devine plus un chemin cours/niveau incomplet.
+
+## 7. Migration des anciens tags
+
+L’outil est toujours en aperçu par défaut :
+
+```bash
+.venv/bin/python update_anki_tags.py
+```
+
+Limiter l’aperçu aux cartes ajoutées depuis un jour :
+
+```bash
+.venv/bin/python update_anki_tags.py --added-days 1
+```
+
+Limiter l’aperçu à une note :
+
+```bash
+.venv/bin/python update_anki_tags.py --note-id 1784649646892
+```
+
+Appliquer seulement les nouveaux tags à cette note :
+
+```bash
+.venv/bin/python update_anki_tags.py \
+  --note-id 1784649646892 \
+  --apply \
+  --confirm AJOUTER_TAGS_CHINOIS
+```
+
+La seconde phase possède son propre aperçu et son propre jeton :
+
+```bash
+.venv/bin/python update_anki_tags.py --cleanup-legacy
+.venv/bin/python update_anki_tags.py \
+  --cleanup-legacy \
+  --apply \
+  --confirm NETTOYER_TAGS_CHINOIS
+```
+
+Avant toute application, un paquet de sauvegarde est exporté dans
+`~/Documents/AnkiBackups/Huaxia`. Les relations Yoyo ambiguës sont signalées et
+leurs anciens tags ne sont pas supprimés.
+
+Le parent historique `chinois` est volontairement conservé lorsqu’il existe :
+dans Anki, supprimer ce parent supprimerait aussi tous les nouveaux tags
+hiérarchiques `chinois::*` de la note.

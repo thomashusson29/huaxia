@@ -7,7 +7,7 @@ avec traçabilité explicite de la source (Humain vs Fallback TTS).
 import os
 import requests
 import asyncio
-from typing import Optional
+from typing import Optional, Tuple
 
 def generate_audio_youdao(word: str, output_path: str) -> bool:
     """Télécharge l'enregistrement humain du dictionnaire Youdao."""
@@ -46,25 +46,28 @@ async def _generate_edge_tts_async(word: str, output_path: str) -> bool:
     except Exception:
         return False
 
-def generate_audio_sync(word: str, output_path: str) -> Optional[str]:
+def generate_audio_sync_with_source(
+    word: str,
+    output_path: str,
+) -> Tuple[Optional[str], str]:
     """
     Génère l'audio MP3 pour un caractère ou mot composé chinois.
     Affiche explicitement la source utilisée (Dictionnaire Youdao HD vs Fallback).
     """
     if not word:
-        return None
+        return None, ""
         
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     
     # 1. Priorité Youdao (Enregistrement de dictionnaire humain)
     if generate_audio_youdao(word, output_path):
         print(f"  [Audio] '{word}' -> Source : Dictionnaire humain Youdao HD")
-        return output_path
+        return output_path, "youdao"
         
     # 2. Secondaire Baidu Dictionary
     if generate_audio_baidu(word, output_path):
         print(f"  [Audio] '{word}' -> Source : Dictionnaire Baidu Speech")
-        return output_path
+        return output_path, "baidu"
         
     # 3. Fallback Edge-TTS
     try:
@@ -75,7 +78,7 @@ def generate_audio_sync(word: str, output_path: str) -> Optional[str]:
         
     if loop.run_complete(_generate_edge_tts_async(word, output_path)):
         print(f"  [Audio Fallback] '{word}' -> Source : Synthèse Edge-TTS Neural (-20%)")
-        return output_path
+        return output_path, "edge_tts"
         
     # 4. Secours ultime gTTS
     try:
@@ -83,10 +86,16 @@ def generate_audio_sync(word: str, output_path: str) -> Optional[str]:
         tts = gTTS(text=word, lang='zh-CN', slow=True)
         tts.save(output_path)
         print(f"  [Audio Fallback] '{word}' -> Source : gTTS")
-        return output_path
+        return output_path, "gtts"
     except Exception as e:
         print(f"  [Audio Error] Impossible de générer l'audio pour '{word}': {e}")
-        return None
+        return None, ""
+
+
+def generate_audio_sync(word: str, output_path: str) -> Optional[str]:
+    """Compatibilité : retourne uniquement le chemin audio."""
+    audio_path, _ = generate_audio_sync_with_source(word, output_path)
+    return audio_path
 
 if __name__ == "__main__":
     import sys

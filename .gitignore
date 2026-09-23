@@ -7,3 +7,10 @@
 /books/New\ Practical\ Chinese\ Reader\ 1\ (Textbook\ +\ Workbook\ +\ Audio)\ --\ Liu\ Xun\ --\ New\ Practical\ Chinese\ Reader\ 01,\ 1,\ 2nd\ revised,\ 2010\ --\ Beijing\ Language\ --\ 74083120413f05f9b4742b0b6a3971b1\ --\ Anna’s\ Archive/NPCR\ 1.pdf
 /books/Integrated_Chinese_Level_1_Part_1_Simplified.apkg
 /books/Integrated\ Chinese\ 4th\ Edition,\ Volume\ 1\ Workbook\ --\ Yuehua\ Liu\ and\ Tao-chung\ Yao\ Nyan-Ping\ Bi,\ Yaohua\ Shi,\ --\ Integrated\ Chinese\ series,\ 4th\ edition,\ --\ isbn13\ 9781622911318\ --\ 84ee52444b74a03f29ef636c805a2a6b\ --\ Anna’s\ Archive.pdf
+
+# --- git-ignore-auto (2026-09-23) ---
+/anki_characters/chineasy_to_anki/.venv/lib/python3.14/site-packages/cv2/cv2.abi3.so
+/anki_characters/chineasy_to_anki/.venv/lib/python3.14/site-packages/torch/lib/libtorch_python.dylib
+/anki_characters/chineasy_to_anki/.venv/lib/python3.14/site-packages/torch/lib/libtorch_cpu.dylib
+/yoyochinese/downloads/Courses/Beginner\ Conversational/Level\ 01/Unit\ 001\ -\ Getting\ Started/Lesson\ 02\ -\ What\ Is\ Pinyin/BCC-001-02.mp4
+/yoyochinese/downloads/Courses/Chinese\ Characters/Level\ 01/Unit\ 001\ -\ Introduction/Lesson\ 02\ -\ How\ Many\ Chinese\ Characters\ Should\ You\ Learn/CCC-001-02.mp4

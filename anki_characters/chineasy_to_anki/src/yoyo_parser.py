@@ -2,19 +2,33 @@
 Module de conversion PDF vers Markdown et de parsing structuré pour Yoyo Chinese.
 Extrait le vocabulaire et les phrases des fiches de cours PDF Yoyo Chinese,
 génère un fichier Markdown propre avec tableaux et uniquement des caractères chinois simplifiés,
-génère les tags Anki appropriés (chinois, yoyochinese, unit1, lesson1, etc.)
+génère les tags Anki hiérarchiques Huaxia
 et l'enregistre à la fois dans le dossier du PDF d'origine et dans output_markdown/.
 """
 
 import os
+from pathlib import Path
 import re
 import subprocess
+import sys
 import unicodedata
 import requests
 from typing import List, Dict, Any, Tuple
 import pypdf
 
+REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+if str(REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPOSITORY_ROOT))
+
+from huaxia_tags import source_tag  # noqa: E402
+
 PINYIN_TONE_CHARS = "āáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜĀÁǍÀĒÉĚÈĪÍǏÌŌÓǑÒŪÚǓÙǕǗǙǛ"
+TABLE_HEADERS = {
+    "english",
+    "pinyin",
+    "chinese",
+    "chinese characters",
+}
 
 def clean_text(text: str) -> str:
     """Nettoie et normalise le texte (supprime bruits d'impression, espaces insecables)."""
@@ -73,51 +87,78 @@ def extract_simplified_hanzi(text: str) -> str:
             return first
     return text.strip()
 
-def filter_simplified_cjk_list(cjk_lines: List[str]) -> List[str]:
+def filter_simplified_cjk_list(
+    cjk_lines: List[str],
+    *,
+    expected_count: int | None = None,
+) -> List[str]:
     """
     Filtre une liste de lignes CJK alternant Simplifié/Traditionnel.
     Ne conserve que les caractères simplifiés.
     """
-    res = []
-    idx = 0
-    while idx < len(cjk_lines):
-        curr_raw = cjk_lines[idx]
-        curr_clean = extract_simplified_hanzi(curr_raw)
-        res.append(curr_clean)
-        
-        if '/' in curr_raw:
-            idx += 1
-        elif idx + 1 < len(cjk_lines):
-            nxt = cjk_lines[idx + 1]
-            if is_cjk_string(nxt) and '/' not in nxt and len(nxt) == len(curr_raw):
-                idx += 2
+    slash_cleaned = [extract_simplified_hanzi(line) for line in cjk_lines]
+    if expected_count and len(slash_cleaned) == expected_count * 2:
+        # Certains anciens PDF regroupent d’abord tous les textes, puis les
+        # Hanzi simplifiés/traditionnels en paires. Cette réduction n’est sûre
+        # que lorsque le nombre attendu confirme exactement cette structure.
+        return slash_cleaned[::2]
+    return slash_cleaned
+
+
+def parse_rowwise_section(lines: List[str]) -> List[Tuple[str, str, str]]:
+    """Extrait les lignes organisées autour d'un Hanzi terminal.
+
+    Les fiches Yoyo alternent entre ``anglais, pinyin, hanzi`` et
+    ``pinyin, anglais, hanzi``. Le Hanzi termine néanmoins chaque ligne
+    logique. Les titres placés avant l’anglais sont ignorés en prenant le
+    texte le plus proche du pinyin.
+    """
+    rows: List[Tuple[str, str, str]] = []
+    pending: List[str] = []
+    for line in lines:
+        if line.strip().lower() in TABLE_HEADERS:
+            continue
+        if not is_cjk_string(line):
+            pending.append(line)
+            continue
+
+        pinyin_indexes = [
+            index for index, value in enumerate(pending) if is_pinyin_line(value)
+        ]
+        if len(pinyin_indexes) == 1:
+            pinyin_index = pinyin_indexes[0]
+            after = pending[pinyin_index + 1 :]
+            before = pending[:pinyin_index]
+            if after:
+                english = " ".join(after)
+            elif before:
+                english = before[-1]
             else:
-                idx += 1
-        else:
-            idx += 1
-    return res
+                english = ""
+            if english:
+                rows.append(
+                    (
+                        english,
+                        pending[pinyin_index],
+                        extract_simplified_hanzi(line),
+                    )
+                )
+        pending = []
+    return rows
 
 def build_tags_for_yoyo_item(lesson_title: str, base_filename: str, category: str) -> List[str]:
     """
-    Génère une liste de tags Anki propres et hiérarchisés pour un élément Yoyo Chinese.
-    Exemples de tags : ['chinois', 'yoyochinese', 'unit1', 'lesson1', 'vocabulary']
-    """
-    tags = ["chinois", "yoyochinese"]
-    
-    full_text = f"{lesson_title} {base_filename}".lower()
-    
-    m_unit = re.search(r'unit[-_\s]*(\d+)', full_text)
-    if m_unit:
-        tags.append(f"unit{int(m_unit.group(1))}")
-        
-    m_lesson = re.search(r'lesson[-_\s]*(\d+)', full_text)
-    if m_lesson:
-        tags.append(f"lesson{int(m_lesson.group(1))}")
+    Génère les tags sûrs disponibles dans l'ancien importeur PDF.
 
+    Le PDF ne fournit pas toujours le cours et le niveau. Les anciens tags
+    ``unit1``/``lesson1`` ne sont donc plus émis : une relation complète ne
+    doit jamais être devinée. Le téléchargeur Yoyo moderne, qui possède toutes
+    les métadonnées, produit le chemin cours/niveau/unité/leçon complet.
+    """
+    tags = [source_tag("yoyochinese")]
     if category:
         tags.append(category.lower())
-
-    return list(dict.fromkeys(tags)) # Éliminer les doublons éventuels
+    return list(dict.fromkeys(tags))
 
 def generate_clean_markdown(lesson_title: str, items: List[Dict[str, Any]]) -> str:
     """
@@ -212,25 +253,15 @@ def parse_yoyo_pdf(pdf_path: str, output_md_dir: str = "output_markdown", use_ol
     # Section 1 : Pronoms / Verbes
     if vocab_idx > 0:
         head_lines = lines[:vocab_idx]
-        eng_list, pinyin_list, cjk_list = [], [], []
-        for l in head_lines:
-            if l == lesson_title or l in ["English", "Pinyin", "Chinese Characters"]:
-                continue
-            if is_cjk_string(l):
-                cjk_list.append(l)
-            elif is_pinyin_line(l):
-                pinyin_list.append(l)
-            else:
-                eng_list.append(l)
-
-        cjk_clean = filter_simplified_cjk_list(cjk_list)
-        min_len = min(len(eng_list), len(pinyin_list), len(cjk_clean))
-        for i in range(min_len):
+        head_rows = parse_rowwise_section(
+            [line for line in head_lines if line != lesson_title]
+        )
+        for english, pinyin, hanzi in head_rows:
             item_tags = build_tags_for_yoyo_item(lesson_title, base_name, "Vocabulary")
             items.append({
-                "hanzi": cjk_clean[i],
-                "pinyin": pinyin_list[i],
-                "english": eng_list[i],
+                "hanzi": hanzi,
+                "pinyin": pinyin,
+                "english": english,
                 "literal": "",
                 "category": "Vocabulary",
                 "lesson": lesson_title,
@@ -241,38 +272,61 @@ def parse_yoyo_pdf(pdf_path: str, output_md_dir: str = "output_markdown", use_ol
     if vocab_idx != -1:
         end_v = sentences_idx if sentences_idx != -1 else len(lines)
         v_lines = lines[vocab_idx + 1:end_v]
-        eng_items, pinyin_items, cjk_items = [], [], []
-        
-        for l in v_lines:
-            if is_cjk_string(l):
-                cjk_items.append(l)
-            elif is_pinyin_line(l):
-                pinyin_items.append(l)
-            else:
-                eng_items.append(l)
+        parsed_vocab_rows = parse_rowwise_section(v_lines)
+        vocab_rows = [
+            (english, pinyin, hanzi, "")
+            for english, pinyin, hanzi in parsed_vocab_rows
+        ]
+        if not vocab_rows:
+            eng_items, pinyin_items, cjk_items = [], [], []
+            for line in v_lines:
+                if line.strip().lower() in TABLE_HEADERS:
+                    continue
+                if is_cjk_string(line):
+                    cjk_items.append(line)
+                elif is_pinyin_line(line):
+                    pinyin_items.append(line)
+                else:
+                    eng_items.append(line)
 
-        clean_eng = []
-        i = 0
-        while i < len(eng_items):
-            main_eng = eng_items[i]
-            lit_note = ""
-            if i + 1 < len(eng_items) and "(lit" in eng_items[i+1].lower():
-                lit_note = eng_items[i+1]
-                i += 2
-            else:
-                i += 1
-            clean_eng.append((main_eng, lit_note))
+            clean_eng = []
+            index = 0
+            while index < len(eng_items):
+                main_eng = eng_items[index]
+                lit_note = ""
+                if (
+                    index + 1 < len(eng_items)
+                    and "(lit" in eng_items[index + 1].lower()
+                ):
+                    lit_note = eng_items[index + 1]
+                    index += 2
+                else:
+                    index += 1
+                clean_eng.append((main_eng, lit_note))
 
-        cjk_clean = filter_simplified_cjk_list(cjk_items)
-        min_len = min(len(clean_eng), len(pinyin_items), len(cjk_clean))
-        for k in range(min_len):
-            eng_val, lit_val = clean_eng[k]
+            cjk_clean = filter_simplified_cjk_list(
+                cjk_items,
+                expected_count=len(pinyin_items),
+            )
+            vocab_rows = [
+                (
+                    clean_eng[index][0],
+                    pinyin_items[index],
+                    cjk_clean[index],
+                    clean_eng[index][1],
+                )
+                for index in range(
+                    min(len(clean_eng), len(pinyin_items), len(cjk_clean))
+                )
+            ]
+
+        for eng_val, pinyin_val, hanzi_val, literal_val in vocab_rows:
             item_tags = build_tags_for_yoyo_item(lesson_title, base_name, "Vocabulary")
             items.append({
-                "hanzi": cjk_clean[k],
-                "pinyin": pinyin_items[k],
+                "hanzi": hanzi_val,
+                "pinyin": pinyin_val,
                 "english": eng_val,
-                "literal": lit_val,
+                "literal": literal_val,
                 "category": "Vocabulary",
                 "lesson": lesson_title,
                 "tags": item_tags
@@ -281,24 +335,35 @@ def parse_yoyo_pdf(pdf_path: str, output_md_dir: str = "output_markdown", use_ol
     # Section 3 : Sentences
     if sentences_idx != -1:
         s_lines = lines[sentences_idx + 1:]
-        eng_sents, pinyin_sents, cjk_sents = [], [], []
-        
-        for l in s_lines:
-            if is_cjk_string(l):
-                cjk_sents.append(l)
-            elif is_pinyin_line(l):
-                pinyin_sents.append(l)
-            else:
-                eng_sents.append(l)
+        sentence_rows = parse_rowwise_section(s_lines)
+        if not sentence_rows:
+            eng_sents, pinyin_sents, cjk_sents = [], [], []
+            for line in s_lines:
+                if line.strip().lower() in TABLE_HEADERS:
+                    continue
+                if is_cjk_string(line):
+                    cjk_sents.append(line)
+                elif is_pinyin_line(line):
+                    pinyin_sents.append(line)
+                else:
+                    eng_sents.append(line)
+            cjk_clean = filter_simplified_cjk_list(
+                cjk_sents,
+                expected_count=len(pinyin_sents),
+            )
+            sentence_rows = [
+                (eng_sents[index], pinyin_sents[index], cjk_clean[index])
+                for index in range(
+                    min(len(eng_sents), len(pinyin_sents), len(cjk_clean))
+                )
+            ]
 
-        cjk_clean = filter_simplified_cjk_list(cjk_sents)
-        min_len = min(len(eng_sents), len(pinyin_sents), len(cjk_clean))
-        for k in range(min_len):
+        for english, pinyin, hanzi in sentence_rows:
             item_tags = build_tags_for_yoyo_item(lesson_title, base_name, "Sentence")
             items.append({
-                "hanzi": cjk_clean[k],
-                "pinyin": pinyin_sents[k],
-                "english": eng_sents[k],
+                "hanzi": hanzi,
+                "pinyin": pinyin,
+                "english": english,
                 "literal": "",
                 "category": "Sentence",
                 "lesson": lesson_title,

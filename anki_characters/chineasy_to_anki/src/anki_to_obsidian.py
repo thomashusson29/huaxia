@@ -4,17 +4,81 @@ gestion du frontmatter YAML, et copie automatique des médias (images mnémoniqu
 """
 
 import os
+from pathlib import Path
 import re
 import html
 import shutil
 import json
+import sys
 import urllib.request
 from typing import List, Dict, Any, Optional
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+if str(REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPOSITORY_ROOT))
+
+from huaxia_tags import (  # noqa: E402
+    TagContext,
+    anki_to_obsidian_tag,
+    build_managed_tags,
+)
 
 ANKI_CONNECT_PORTS = [8766, 8765]
 DEFAULT_DECK = "chinois::chineasy_characters"
 DEFAULT_OBSIDIAN_DIR = "/Users/thomashusson/Documents/Projets/Docs_internat/Chinois/caracteres"
 DEFAULT_MEDIA_DIR = os.path.join(DEFAULT_OBSIDIAN_DIR, "media")
+DATABASE_STEM = "00_Base_de_Donnees_Caracteres"
+DATABASE_VIEW_NAME = "Tous les caractères"
+_ANKI_NOTE_ID_RE = re.compile(
+    r"^anki_note_id:\s*[\"']?(\d+)[\"']?\s*$",
+    flags=re.MULTILINE,
+)
+
+DATABASE_BASE_CONTENT = f"""filters:
+  and:
+    - 'file.folder == this.file.folder'
+    - 'file.ext == "md"'
+    - 'file.name != "{DATABASE_STEM}.md"'
+formulas:
+  caractere: 'html("<strong>" + escapeHTML(hanzi) + "</strong>")'
+  fiche: 'file.asLink(file.basename)'
+  mnemonique: 'if(file.embeds.filter(["png", "jpg", "jpeg", "gif", "webp", "svg"].contains(value.asFile().ext.lower())).length > 0, image(file.embeds.filter(["png", "jpg", "jpeg", "gif", "webp", "svg"].contains(value.asFile().ext.lower()))[0].asFile()), "")'
+  audio: 'if(file.embeds.filter(["mp3", "wav", "m4a", "ogg", "flac"].contains(value.asFile().ext.lower())).length > 0, html("<audio src=\\"media/" + file.embeds.filter(["mp3", "wav", "m4a", "ogg", "flac"].contains(value.asFile().ext.lower()))[0].asFile().name + "\\" controls style=\\"height:30px; width:130px; vertical-align:middle;\\"></audio>"), "")'
+properties:
+  formula.caractere:
+    displayName: Caractère
+  pinyin:
+    displayName: Pinyin
+  traduction:
+    displayName: Traduction
+  formula.fiche:
+    displayName: Fiche Obsidian
+  formula.mnemonique:
+    displayName: Mnémonique
+  formula.audio:
+    displayName: Audio
+views:
+  - type: table
+    name: {DATABASE_VIEW_NAME}
+    order:
+      - formula.caractere
+      - pinyin
+      - traduction
+      - formula.fiche
+      - formula.mnemonique
+      - formula.audio
+    rowHeight: tall
+"""
+
+DATABASE_MARKDOWN_CONTENT = f"""---
+tags:
+  - index
+  - base-de-donnees
+---
+# 📚 Base de Données des Caractères Chineasy
+
+![[{DATABASE_STEM}.base#{DATABASE_VIEW_NAME}]]
+"""
 
 # Recherche de dossiers média locaux fallback au cas où
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -73,6 +137,59 @@ def clean_html_to_markdown(html_str: str) -> str:
     cleaned = '\n'.join(lines)
     cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
     return cleaned.strip()
+
+
+def source_from_deck_name(deck_name: str) -> str:
+    lowered = (deck_name or "").lower()
+    if "chineasy" in lowered:
+        return "chineasy"
+    if "yoyo" in lowered or "ychinese" in lowered:
+        return "yoyochinese"
+    if "integrated chinese" in lowered:
+        return "integrated_chinese"
+    if "le_chinois_facile" in lowered:
+        return "le_chinois_facile"
+    return ""
+
+
+def existing_markdown_paths_by_note_id(target_dir: str) -> Dict[str, str]:
+    paths: Dict[str, str] = {}
+    if not os.path.isdir(target_dir):
+        return paths
+    for filename in os.listdir(target_dir):
+        path = os.path.join(target_dir, filename)
+        if (
+            filename == f"{DATABASE_STEM}.md"
+            or not filename.lower().endswith(".md")
+            or not os.path.isfile(path)
+        ):
+            continue
+        with open(path, "r", encoding="utf-8") as f:
+            match = _ANKI_NOTE_ID_RE.search(f.read())
+        if match:
+            paths[match.group(1)] = path
+    return paths
+
+
+def resolve_markdown_path(
+    target_dir: str,
+    filename_base: str,
+    note_id: Any,
+    existing_by_note_id: Dict[str, str],
+) -> str:
+    note_id_text = str(note_id)
+    existing = existing_by_note_id.get(note_id_text)
+    if existing:
+        return existing
+
+    preferred = os.path.join(target_dir, f"{filename_base}.md")
+    if not os.path.exists(preferred):
+        return preferred
+    return os.path.join(
+        target_dir,
+        f"{filename_base}__anki_{note_id_text}.md",
+    )
+
 
 def locate_media_file(filename: str, anki_media_dir: Optional[str] = None) -> Optional[str]:
     """Cherche un fichier média dans le dossier Anki ou les dossiers projet locaux."""
@@ -141,6 +258,7 @@ def export_anki_notes_to_obsidian(
     exported_count = 0
     copied_media_count = 0
     created_files = []
+    existing_by_note_id = existing_markdown_paths_by_note_id(target_dir)
 
     for note in notes_info:
         fields = note.get("fields", {})
@@ -148,10 +266,13 @@ def export_anki_notes_to_obsidian(
         
         # Extraction des valeurs des champs
         hanzi = fields.get("Hanzi", {}).get("value", "").strip()
+        traditional = fields.get("Traditional", {}).get("value", "").strip()
         pinyin = fields.get("Pinyin", {}).get("value", "").strip()
         anglais = fields.get("Anglais", {}).get("value", "").strip()
         explication_raw = fields.get("Explication", {}).get("value", "").strip()
-        img_raw = fields.get("ImageMnemo", {}).get("value", "").strip()
+        img_raw = fields.get("MnemoAuto", {}).get("value", "").strip()
+        if not img_raw:
+            img_raw = fields.get("ImageMnemo", {}).get("value", "").strip()
         audio_raw = fields.get("Audio", {}).get("value", "").strip()
 
         if not hanzi and not anglais:
@@ -159,7 +280,12 @@ def export_anki_notes_to_obsidian(
             
         filename_base = hanzi if hanzi else anglais
         filename_base = re.sub(r'[\\/*?:"<>|]', '_', filename_base)
-        md_filepath = os.path.join(target_dir, f"{filename_base}.md")
+        md_filepath = resolve_markdown_path(
+            target_dir,
+            filename_base,
+            note_id,
+            existing_by_note_id,
+        )
 
         # Extraction du nom d'image
         img_filename = None
@@ -199,18 +325,30 @@ def export_anki_notes_to_obsidian(
         individual_chars = list(dict.fromkeys(re.findall(r'[\u4e00-\u9fff]', hanzi)))
         component_links = [f'"[[{char}]]"' for char in individual_chars]
         
-        # Tags enrichis avec les caractères chinois
-        tags_list = ["chinois", "chineasy", "caractere"]
-        if hanzi:
-            tags_list.append(f"caractere/{hanzi}")
-            for char in individual_chars:
-                if char not in tags_list and char != hanzi:
-                    tags_list.append(f"racine/{char}")
+        # Les tags Anki utilisent ``::`` ; Obsidian représente la même
+        # hiérarchie avec ``/``.
+        generated_tags = set(
+            build_managed_tags(
+                TagContext(
+                    hanzi=hanzi,
+                    traditional=traditional,
+                    pinyin=pinyin,
+                    source=source_from_deck_name(deck_name),
+                )
+            )
+        )
+        generated_tags.update(
+            tag
+            for tag in note.get("tags", [])
+            if tag.startswith("chinois::")
+        )
+        tags_list = sorted(anki_to_obsidian_tag(tag) for tag in generated_tags)
 
         # Frontmatter YAML structuré (Dataview / Properties / Base de données compatible)
         yaml_lines = [
             "---",
             f'hanzi: "{hanzi}"',
+            f'traditionnel: "{traditional}"',
             f'pinyin: "{pinyin}"',
             f'traduction: "{anglais}"',
             f'deck: "{deck_name}"',
@@ -263,46 +401,24 @@ def export_anki_notes_to_obsidian(
 
         exported_count += 1
         created_files.append(md_filepath)
+        existing_by_note_id[str(note_id)] = md_filepath
 
-    # Création / Mise à jour de la note maître Base de Données globale
-    db_index_path = os.path.join(target_dir, "00_Base_de_Donnees_Caracteres.md")
-    db_content_lines = [
-        "---",
-        "tags:",
-        "  - index",
-        "  - base-de-donnees",
-        "---",
-        "# 📚 Base de Données des Caractères Chineasy",
-        "",
-        "| Caractère | Pinyin | Traduction | Fiche Obsidian | Mnémonique | Audio |",
-        "| :---: | :--- | :--- | :---: | :---: | :---: |"
-    ]
+    # La note maître embarque une véritable vue Obsidian Bases. La vue lit
+    # directement tous les Markdown du dossier et se rafraîchit sans reconstruire
+    # un tableau statique à chaque modification.
+    db_index_path = os.path.join(target_dir, f"{DATABASE_STEM}.md")
+    db_base_path = os.path.join(target_dir, f"{DATABASE_STEM}.base")
 
-    for note in notes_info:
-        fields = note.get("fields", {})
-        h = fields.get("Hanzi", {}).get("value", "").strip()
-        p = fields.get("Pinyin", {}).get("value", "").strip()
-        a = fields.get("Anglais", {}).get("value", "").strip()
-        img_raw = fields.get("ImageMnemo", {}).get("value", "").strip()
-        audio_raw = fields.get("Audio", {}).get("value", "").strip()
-        
-        if not h:
-            continue
+    base_was_missing = not os.path.exists(db_base_path)
+    if base_was_missing:
+        with open(db_base_path, "w", encoding="utf-8") as f:
+            f.write(DATABASE_BASE_CONTENT)
 
-        img_match = re.search(r'src=["\']([^"\']+)["\']', img_raw)
-        img_name = img_match.group(1) if img_match else ""
-        img_cell = f'<img src="media/{img_name}" width="80" style="border-radius:4px;">' if img_name else "-"
-
-        audio_match = re.search(r'\[sound:([^\]]+)\]', audio_raw)
-        audio_name = audio_match.group(1) if audio_match else ""
-        audio_cell = f'<audio src="media/{audio_name}" controls style="height:30px; width:130px; vertical-align:middle;"></audio>' if audio_name else "-"
-
-        link_cell = f'<a class="internal-link" href="{h}" style="text-decoration:none !important; border-bottom:none !important; font-size:18px; font-weight:bold;">{h}</a>'
-
-        db_content_lines.append(f"| **{h}** | {p} | {a} | {link_cell} | {img_cell} | {audio_cell} |")
-
-    with open(db_index_path, "w", encoding="utf-8") as f:
-        f.write("\n".join(db_content_lines))
+    # Lors de la première migration, remplacer l'ancien tableau statique par
+    # l'embed Bases. Ensuite, préserver les réglages faits dans Obsidian.
+    if base_was_missing or not os.path.exists(db_index_path):
+        with open(db_index_path, "w", encoding="utf-8") as f:
+            f.write(DATABASE_MARKDOWN_CONTENT)
 
     return {
         "success": True,
@@ -310,7 +426,8 @@ def export_anki_notes_to_obsidian(
         "copied_media_count": copied_media_count,
         "target_dir": target_dir,
         "files": created_files,
-        "database_index": db_index_path
+        "database_index": db_index_path,
+        "database_base": db_base_path
     }
 
 if __name__ == "__main__":

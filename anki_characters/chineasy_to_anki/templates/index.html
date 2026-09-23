@@ -138,6 +138,29 @@
             background: #4fa0e3;
         }
 
+        .tag-tools {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 16px;
+        }
+
+        .tag-tools-actions {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .tag-tools label {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin: 0 8px 0 0;
+            font-weight: 400;
+        }
+
         .drop-zone {
             border: 2px dashed var(--border);
             border-radius: 6px;
@@ -262,6 +285,23 @@
             <button class="tab-btn" onclick="switchTab('yoyo')">Yoyo Chinese (PDF)</button>
         </div>
 
+        <div class="tag-tools">
+            <div class="row" style="margin-bottom:8px;">
+                <strong>Tags des cartes ajoutées aujourd’hui</strong>
+                <div style="margin-top:4px; color:#5c6370;">
+                    Périmètre fixe : <code>deck:"chinois" added:1</code>
+                </div>
+            </div>
+            <div class="tag-tools-actions">
+                <label>
+                    <input type="checkbox" id="recent-tags-cleanup" onchange="resetRecentTagsPreview()">
+                    Phase 2 : retirer les anciens tags automatiques
+                </label>
+                <button id="btn-preview-recent-tags" onclick="previewRecentTags()">Aperçu</button>
+                <button id="btn-apply-recent-tags" class="btn-primary" onclick="applyRecentTags()" disabled>Appliquer l’aperçu</button>
+            </div>
+        </div>
+
         <!-- Section Chineasy -->
         <div id="panel-chineasy" class="section-panel active">
             <div class="row">
@@ -308,6 +348,8 @@
     <script>
         fetchFolders();
         fetchPdfFiles();
+        let recentTagsPreviewMode = null;
+        let recentTagsPreviewToken = null;
 
         function switchTab(mode) {
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -469,6 +511,107 @@
                 }
                 terminal.scrollTop = terminal.scrollHeight;
             });
+        }
+
+        function resetRecentTagsPreview() {
+            recentTagsPreviewMode = null;
+            recentTagsPreviewToken = null;
+            document.getElementById('btn-apply-recent-tags').disabled = true;
+        }
+
+        function recentTagsMode() {
+            return document.getElementById('recent-tags-cleanup').checked;
+        }
+
+        function logRecentTagsResult(data) {
+            const terminal = document.getElementById('terminal');
+            if (!data.success) {
+                terminal.textContent += `[Tags Erreur] ${data.error}\n`;
+                terminal.scrollTop = terminal.scrollHeight;
+                return;
+            }
+            const report = data.report;
+            const action = data.applied ? 'Application' : 'Aperçu';
+            terminal.textContent +=
+                `\n[Tags] ${action} — ${report.query}\n` +
+                `  Notes examinées : ${report.notes_scanned}\n` +
+                `  Notes à modifier : ${report.notes_changed}\n` +
+                `  Tags à ajouter : ${report.tags_added}\n` +
+                `  Tags à retirer : ${report.tags_removed}\n` +
+                `  Avertissements : ${report.warnings}\n`;
+            report.records
+                .filter(record => record.warnings.length > 0)
+                .slice(0, 10)
+                .forEach(record => {
+                    terminal.textContent +=
+                        `  ! ${record.note_id} ${record.label}: ${record.warnings.join(' | ')}\n`;
+                });
+            if (data.backup_path) {
+                terminal.textContent += `  Sauvegarde : ${data.backup_path}\n`;
+            }
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        function previewRecentTags() {
+            const cleanupLegacy = recentTagsMode();
+            const previewButton = document.getElementById('btn-preview-recent-tags');
+            previewButton.disabled = true;
+            fetch('/api/tags/recent', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    apply: false,
+                    cleanup_legacy: cleanupLegacy
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                logRecentTagsResult(data);
+                if (data.success) {
+                    recentTagsPreviewMode = cleanupLegacy;
+                    recentTagsPreviewToken = data.preview_token;
+                    document.getElementById('btn-apply-recent-tags').disabled = false;
+                }
+            })
+            .catch(error => logRecentTagsResult({success: false, error: error.toString()}))
+            .finally(() => { previewButton.disabled = false; });
+        }
+
+        function applyRecentTags() {
+            const cleanupLegacy = recentTagsMode();
+            if (recentTagsPreviewMode !== cleanupLegacy) {
+                resetRecentTagsPreview();
+                return;
+            }
+            const phase = cleanupLegacy
+                ? 'ajouter les nouveaux tags ET retirer les anciens tags automatiques'
+                : 'ajouter les nouveaux tags';
+            if (!window.confirm(
+                `Confirmer : ${phase} pour les cartes correspondant à deck:"chinois" added:1 ?`
+            )) {
+                return;
+            }
+
+            const applyButton = document.getElementById('btn-apply-recent-tags');
+            applyButton.disabled = true;
+            fetch('/api/tags/recent', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    apply: true,
+                    cleanup_legacy: cleanupLegacy,
+                    confirm: cleanupLegacy
+                        ? 'NETTOYER_TAGS_CHINOIS'
+                        : 'AJOUTER_TAGS_CHINOIS',
+                    preview_token: recentTagsPreviewToken
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                logRecentTagsResult(data);
+                resetRecentTagsPreview();
+            })
+            .catch(error => logRecentTagsResult({success: false, error: error.toString()}));
         }
 
         function renderCards(cards) {
